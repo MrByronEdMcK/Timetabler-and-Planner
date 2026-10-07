@@ -1,0 +1,19 @@
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Editor & IDE Settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary / Log files
+*.log

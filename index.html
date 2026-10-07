@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timetable and Planner</title>
+  <meta name="description" content="Interactive annual lesson planner, X-week rotating timetabler, and pacing conflict resolver for teachers.">
+  
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/calendar.css">
+  <link rel="stylesheet" href="css/timetable.css">
+  <link rel="stylesheet" href="css/planner.css">
+  <script>
+    (function() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const targetTheme = params.get('theme');
+        const targetAccent = params.get('accent');
+        if (targetTheme) {
+          document.documentElement.setAttribute('data-theme', targetTheme);
+        }
+        if (targetAccent) {
+          document.documentElement.setAttribute('data-accent', targetAccent);
+        }
+        if (params.get('notour') || params.get('modal') || params.get('popover')) {
+          const raw = localStorage.getItem('aus_teacher_timetabler_state_v3');
+          let data = raw ? JSON.parse(raw) : {};
+          data.tutorialCompleted = true;
+          localStorage.setItem('aus_teacher_timetabler_state_v3', JSON.stringify(data));
+        }
+      } catch(e) {}
+    })();
+  </script>
+</head>
+<body>
+  <!-- Dedicated Multi-Week Print Container (Only visible during print) -->
+  <div id="print-multiweek-container" class="print-only"></div>
+
+  <div class="app-container">
+    <!-- Top Header Bar -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">🦘</div>
+        <div>
+          <h1 class="brand-title">Timetable and Planner</h1>
+          <div class="brand-subtitle">Interactive Annual Pacing & Curriculum Rotation Engine</div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Light / Dark Theme Mode Toggle -->
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-theme" title="Toggle between Dark and Light visual mode">🌙 Dark</button>
+
+        <!-- Quick Accent Color Picker -->
+        <div class="header-accent-wrapper">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-header-accent" title="Select UI Accent Theme Color">
+            <span class="accent-current-dot" style="width: 12px; height: 12px; border-radius: 50%; background: var(--primary); display: inline-block;"></span>
+            <span>🎨 Accent</span>
+          </button>
+          <div id="header-accent-popover" class="accent-popover hidden">
+            <div class="accent-popover-title">Accent Theme</div>
+            <div class="accent-swatches-grid">
+              <button type="button" class="accent-swatch-btn" data-accent="blue" style="background:#366482;" title="River Slate & Denim (Blue)"></button>
+              <button type="button" class="accent-swatch-btn" data-accent="orange" style="background:#c05638;" title="Terracotta & Rust Clay (Orange)"></button>
+              <button type="button" class="accent-swatch-btn" data-accent="green" style="background:#38734e;" title="Sage & Forest (Green)"></button>
+              <button type="button" class="accent-swatch-btn" data-accent="pink" style="background:#b84e72;" title="Dusty Rose & Blush (Pink)"></button>
+              <button type="button" class="accent-swatch-btn" data-accent="yellow" style="background:#b87320;" title="Honey Amber & Ochre (Yellow)"></button>
+              <button type="button" class="accent-swatch-btn" data-accent="red" style="background:#b83a3a;" title="Crimson Brick (Red)"></button>
+              <button type="button" class="accent-swatch-btn" data-accent="purple" style="background:#7d4e8d;" title="Warm Plum & Violet (Purple)"></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Persistent Storage Indicator Chip -->
+        <button type="button" class="storage-status-chip" id="btn-storage-status-indicator" title="Local persistent storage active (Click for details)">
+          <span class="storage-dot" id="storage-status-dot"></span>
+          <span id="storage-status-label">Saved</span>
+        </button>
+
+        <!-- Settings Cog Button -->
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-open-settings-modal" title="Settings & Data Management">⚙️ Settings</button>
+
+        <!-- Current Date Lock Boundary -->
+        <div class="current-date-badge" title="Edits and reschedules only modify lessons after this date. Past lessons remain locked." style="display:flex; align-items:center; gap:0.4rem;">
+          <span>🔒 Lock Threshold:</span>
+          <input type="date" id="current-date-input" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; font-size: 0.8rem; background: var(--bg-surface); color: inherit; border: 1px solid var(--border-color);">
+          <span id="lock-sync-status-container"></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- App Navigation Tabs -->
+    <nav class="app-nav">
+      <button class="nav-btn active" data-view="terms">📅 1. Terms & Events</button>
+      <button class="nav-btn" data-view="timetable">🧩 2. Timetable Rotation</button>
+      <button class="nav-btn" data-view="lessons">📚 3. Curriculum & Lessons</button>
+      <button class="nav-btn" data-view="master">🎯 4. Master Pacing & Calendar</button>
+      <button class="nav-btn" data-view="homework">📝 5. Weekly Homework & Summary</button>
+    </nav>
+
+    <!-- VIEW 1: Terms & Events -->
+    <main id="view-terms" class="view-panel active">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-title-icon">🗓️</span>
+            <span>Australian School Terms Configuration</span>
+          </div>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.25rem;">
+          Specify start and end dates for the 4 school terms. Lessons are automatically scheduled only during active term dates.
+        </p>
+
+        <!-- Academic School Year Selector Container -->
+        <div id="academic-year-container" style="margin-bottom: 1.25rem;"></div>
+
+        <div id="term-cards-container" class="term-cards-grid">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-title-icon">🚫</span>
+            <span>Calendar Blockout Events (Sports Carnivals, Assemblies, Holidays)</span>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-open-event-modal">+ Add Blockout Event</button>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.25rem;">
+          Add events that block out whole days or specific periods. The scheduler automatically skips these dates.
+        </p>
+        <div id="event-list-container" class="event-list">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </main>
+
+    <!-- VIEW 2: Timetable Rotation Grid -->
+    <main id="view-timetable" class="view-panel">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-title-icon">🔄</span>
+            <span>Rotating Timetable Builder</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+            <label class="form-label" style="margin:0;">Rotation Cycle:</label>
+            <select id="timetable-cycle-select" class="form-control" style="width: auto; padding:0.35rem 0.75rem;">
+              <option value="1">1-Week Timetable</option>
+              <option value="2" selected>2-Week Timetable (Week A / Week B)</option>
+              <option value="3">3-Week Timetable (Week A / B / C)</option>
+              <option value="4">4-Week Timetable (Week A / B / C / D)</option>
+            </select>
+            <!-- Requirement 2: Configure Periods Button -->
+            <button class="btn btn-secondary btn-sm" id="btn-open-period-config">⚙️ Periods & Times</button>
+            <!-- Print A4 Timetable Button in View 2 -->
+            <button class="btn btn-secondary btn-sm" id="btn-print-timetable" title="Print clean landscape A4 timetable">🖨️ Print A4 Timetable</button>
+          </div>
+        </div>
+
+        <div class="timetable-controls">
+          <div id="timetable-week-tabs" class="week-selector-tabs">
+            <!-- Week A / Week B tabs rendered dynamically -->
+          </div>
+          <span style="font-size:0.8rem; color:var(--text-muted);">
+            💡 Click any grid cell to assign a class inline (type to autocomplete).
+          </span>
+        </div>
+
+        <div id="timetable-grid-container" class="timetable-grid-wrapper">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </main>
+
+    <!-- VIEW 3: Curriculum & Lesson Manager -->
+    <main id="view-lessons" class="view-panel">
+      <div class="card">
+        <div class="planner-layout">
+          <!-- Sidebar Class List -->
+          <div>
+            <div class="card-title" style="margin-bottom:1rem;">Classes</div>
+            <div id="lesson-class-selector" class="class-selector-list">
+              <!-- Rendered dynamically -->
+            </div>
+            <button type="button" class="btn btn-secondary btn-xs" id="btn-open-link-classes" style="margin-top:0.5rem; width:100%; font-weight:700;" title="Link parallel classes (e.g. 7MAE1 🔗 7MAE2) to auto-sync homework">🔗 Manage Class Links</button>
+          </div>
+
+          <!-- Main Lesson List -->
+          <div>
+            <div class="card-header" style="margin-bottom:0.75rem;">
+              <div class="card-title">
+                <span class="card-title-icon">📖</span>
+                <span>Ordered Lesson Sequence</span>
+              </div>
+              <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button class="btn btn-secondary btn-sm" id="btn-sync-linked-curriculum" title="Sync all curriculum and homework tasks to linked class(es)">🔄 Sync Linked Curriculum</button>
+                <button class="btn btn-warning btn-sm" id="btn-insert-float-lesson" title="Insert a free Float lesson into sequence">🎈 + Insert Float Lesson</button>
+                <button class="btn btn-secondary btn-sm" id="btn-toggle-collapse-all-topics" title="Collapse or Expand all topic groups">📂 Toggle Collapse All</button>
+                <button class="btn btn-primary btn-sm" id="btn-open-lesson-modal">+ Add Lesson Plan</button>
+              </div>
+            </div>
+            <p style="font-size:0.85rem; color:var(--text-muted);">
+              Drag and drop lesson cards to reorder. Tag lessons as <strong>"🎈 Float"</strong> (pruned FIRST during conflicts) or <strong>"⭐ Revision"</strong> (pruned SECOND).
+            </p>
+            <div id="lesson-list-container" class="lesson-list">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- VIEW 4: Requirement 7 - Master Pacing Calendar Matrix View -->
+    <main id="view-master" class="view-panel">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-title-icon">📊</span>
+            <span>Annual Master Pacing Calendar Matrix</span>
+          </div>
+        </div>
+
+        <!-- Quick Switch Nav Bar (Class Filter, Term Switch, Week Switch) -->
+        <div id="master-calendar-nav-bar"></div>
+
+        <!-- Conflict Banner -->
+        <div id="master-conflict-container"></div>
+
+        <!-- Calendar Grid Container -->
+        <div id="master-calendar-grid-container" class="master-calendar-wrapper">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </main>
+
+    <!-- VIEW 5: Weekly Homework & Classwork Summary View -->
+    <main id="view-homework" class="view-panel">
+      <div class="card">
+        <div class="card-header" style="flex-wrap:wrap; gap:1rem;">
+          <div class="card-title">
+            <span class="card-title-icon">📝</span>
+            <span>Weekly Classwork & Homework Tracker</span>
+          </div>
+          <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+            <button class="btn btn-secondary btn-sm" id="btn-homework-sync-week" title="Sync all homework for this week to linked parallel class(es)">🔄 Sync Week</button>
+            <button class="btn btn-primary btn-sm" id="btn-open-whiteboard-modal">📺 Whiteboard Display Mode</button>
+          </div>
+        </div>
+
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.25rem;">
+          View all classwork items from scheduled lessons for any chosen week. Updates automatically whenever timetable rotations or schedules shift.
+        </p>
+
+        <!-- Homework Controls: Class Selector, Term & Week Selector -->
+        <div id="homework-nav-bar" class="homework-nav-bar">
+          <!-- Class selector buttons rendered dynamically -->
+          <div id="homework-class-selector" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;"></div>
+          <!-- Term & Week selector controls -->
+          <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+            <label class="form-label" style="margin:0; font-size:0.85rem;">Select Week:</label>
+            <select id="homework-term-select" class="form-control" style="width:auto; padding:0.35rem 0.6rem; font-size:0.85rem;"></select>
+            <select id="homework-week-select" class="form-control" style="width:auto; padding:0.35rem 0.6rem; font-size:0.85rem;"></select>
+            <div style="display:flex; gap:0.25rem;">
+              <button class="btn btn-secondary btn-xs" id="btn-homework-prev-week" title="Previous Week">◀ Prev</button>
+              <button class="btn btn-secondary btn-xs" id="btn-homework-next-week" title="Next Week">Next ▶</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Homework Content Grid -->
+        <div id="homework-main-content">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- MODALS -->
+
+  <!-- Modal: Period Customization & Native HTML Time Inputs (Req 2) -->
+  <div id="modal-period-backdrop" class="modal-backdrop">
+    <div class="modal" style="max-width: 780px;">
+      <div class="modal-header">
+        <div class="modal-title">⚙️ Period Configuration & Time Settings</div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; background:var(--bg-subtle); border:1px solid var(--border-color); padding:0.85rem; border-radius:var(--radius-md);">
+        <div>
+          <strong>Time Display Format</strong>
+          <div style="font-size:0.8rem; color:var(--text-muted);">Toggle 12-hour (AM/PM) or 24-hour time</div>
+        </div>
+        <select id="time-format-select" class="form-control" style="width: auto;">
+          <option value="12h">12-Hour (e.g. 9:00 AM - 10:00 AM)</option>
+          <option value="24h">24-Hour (e.g. 09:00 - 10:00)</option>
+        </select>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+        <h4 style="font-size:0.95rem; font-weight:700;">Daily Period Sequence & Breaks</h4>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-secondary btn-sm" id="btn-add-new-period">+ Add Period</button>
+          <button class="btn btn-secondary btn-sm" id="btn-add-new-break">+ Add Break (Recess/Lunch)</button>
+        </div>
+      </div>
+
+      <div id="period-config-container" style="max-height:340px; overflow-y:auto;">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; margin-top:1.5rem;">
+        <button class="btn btn-primary modal-close">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Event -->
+  <div id="modal-event-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Add Blockout Event</div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="form-add-event">
+        <div class="form-group">
+          <label class="form-label">Event Title</label>
+          <input type="text" id="event-title" class="form-control" placeholder="e.g. Athletics Carnival, Year Assembly" required>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input type="date" id="event-date" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Event Type</label>
+            <select id="event-type" class="form-control">
+              <option value="carnival">Sports Carnival</option>
+              <option value="assembly">School Assembly</option>
+              <option value="holiday">Public Holiday</option>
+              <option value="excursion">Excursion</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Scope</label>
+          <div style="display:flex; gap:1rem; align-items:center;">
+            <label><input type="checkbox" id="event-block-allday" checked> Block Entire School Day</label>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Specific Blocked Period (if not whole day)</label>
+            <select id="event-period-select" class="form-control">
+              <option value="p1">Period 1</option>
+              <option value="p2">Period 2</option>
+              <option value="p3">Period 3</option>
+              <option value="p4">Period 4</option>
+              <option value="p5">Period 5</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Target Class (Optional)</label>
+            <select id="event-class-select" class="form-control">
+              <!-- Rendered dynamically -->
+            </select>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
+          <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Event</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Assign Slot Class with Color & Room Details + Delete Slot Button (Req 3 & 4) -->
+  <div id="modal-slot-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="slot-modal-title">Assign Class Slot</div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="form-assign-slot">
+        <div class="form-group">
+          <label class="form-label">Class Name (Type to search existing or create new)</label>
+          <input type="text" id="slot-class-input" class="form-control" list="class-autocomplete-list" placeholder="e.g. Year 9 Maths, 10 Science" autocomplete="off">
+          <datalist id="class-autocomplete-list">
+            <!-- Dynamic Autocomplete Options -->
+          </datalist>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Class Details / Room (Optional subtitle)</label>
+            <input type="text" id="slot-class-details-input" class="form-control" placeholder="e.g. Room 201, Lab A">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Class Color Theme</label>
+            <input type="color" id="slot-class-color-input" class="form-control" value="#3b82f6" style="height:42px;">
+          </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.5rem;">
+          <!-- Requirement 3: Dedicated Clear/Delete Slot Button -->
+          <button type="button" class="btn btn-danger" id="btn-clear-slot">🗑️ Clear / Delete Slot</button>
+          <div style="display:flex; gap:0.75rem;">
+            <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Slot</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Add / Edit Lesson Plan -->
+  <div id="modal-lesson-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="lesson-modal-title">Add Lesson Plan</div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="form-add-lesson">
+        <input type="hidden" id="lesson-id-input">
+        <div class="form-group">
+          <label class="form-label">Lesson Title</label>
+          <input type="text" id="lesson-title-input" class="form-control" placeholder="e.g. Introduction to Trigonometry OR 6G, 6H, 6I" required>
+          <div style="font-size:0.75rem; color:var(--primary); font-weight:600; margin-top:0.25rem;">💡 Tip: Enter comma-separated titles (e.g. 6G, 6H, 6I) to add multiple lessons in sequence.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unit of Work / Topic</label>
+          <input type="text" id="lesson-unit-input" class="form-control" list="unit-autocomplete-list" placeholder="e.g. Unit 3: Trigonometry" autocomplete="off">
+          <datalist id="unit-autocomplete-list">
+            <!-- Dynamic Autocomplete Units -->
+          </datalist>
+        </div>
+        <div class="form-group" style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.75rem;">
+          <label><input type="checkbox" id="lesson-float-check"> 🎈 Tag as "Float" (Free / Buffer Lesson - Pruned FIRST during conflicts)</label>
+          <label><input type="checkbox" id="lesson-revision-check"> ⭐ Tag as "Revision" Lesson (Pruned SECOND during conflicts)</label>
+          <label><input type="checkbox" id="lesson-test-check"> 🎯 Tag as "Assessment / Test Milestone"</label>
+          <label><input type="checkbox" id="lesson-pin-check"> 📌 Pin to Calendar Date & Period Slot</label>
+        </div>
+        <div class="form-group classwork-section-container" id="lesson-test-slot-group" style="display: none;">
+          <label class="form-label" style="color: var(--primary); font-weight: 700;">🎯 Assessment / Pin Slot</label>
+          <div style="display:grid; grid-template-columns: 1fr 1fr 2fr; gap:0.5rem; align-items:end;">
+            <div>
+              <label class="form-label" style="font-size:0.75rem; margin-bottom:0.25rem;">Term</label>
+              <select id="lesson-test-term-select" class="form-control" style="font-size:0.82rem; padding:0.35rem 0.5rem;"></select>
+            </div>
+            <div>
+              <label class="form-label" style="font-size:0.75rem; margin-bottom:0.25rem;">Week</label>
+              <select id="lesson-test-week-select" class="form-control" style="font-size:0.82rem; padding:0.35rem 0.5rem;"></select>
+            </div>
+            <div>
+              <label class="form-label" style="font-size:0.75rem; margin-bottom:0.25rem;">Period Slot</label>
+              <select id="lesson-test-slot-select" class="form-control" style="font-size:0.82rem; padding:0.35rem 0.5rem;"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group classwork-section-container" style="margin-top:1.25rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+            <label class="form-label" style="margin:0; font-weight:700; color:var(--primary);">📚 Classwork & Homework Tasks (3 Fields)</label>
+            <button type="button" class="btn btn-secondary btn-xs" id="btn-add-classwork-row">+ Add Item</button>
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.6rem;">
+            Specify task type (Notes, Textbook, Worksheets), details (e.g. 7A, 7B Q1-5), and optional materials link.
+          </div>
+          <div id="classwork-inputs-container" style="display:flex; flex-direction:column; gap:0.5rem;">
+            <!-- Rendered dynamically -->
+          </div>
+          <datalist id="classwork-type-suggestions">
+            <option value="Notes">
+            <option value="Textbook">
+            <option value="Worksheets">
+            <option value="Handout">
+            <option value="Practice Quiz">
+            <option value="Online Resource">
+          </datalist>
+        </div>
+
+        <div class="form-group" style="margin-top:1.25rem;">
+          <label class="form-label">Lesson Content & Teaching Notes</label>
+          <div class="rich-toolbar">
+            <button type="button" class="rt-btn" data-cmd="bold" title="Bold Text"><b>B</b></button>
+            <button type="button" class="rt-btn" data-cmd="italic" title="Italic Text"><i>I</i></button>
+            <button type="button" class="rt-btn" data-cmd="list" title="Bullet Points">• Bullet List</button>
+            <button type="button" class="rt-btn" data-cmd="highlight" title="Yellow Highlight">🟡 Highlight</button>
+            <button type="button" class="rt-btn" data-cmd="template" title="Insert Lesson Structure Template">📋 Template</button>
+          </div>
+          <textarea id="lesson-content-input" class="form-control" rows="4" placeholder="Enter learning goals, activity outlines, dot points, links, or assessment details..."></textarea>
+        </div>
+
+        <div id="lesson-sync-linked-group" style="display:none; margin-top:1rem; padding:0.65rem 0.85rem; border-radius:var(--radius-md); align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
+          <div id="lesson-sync-linked-label" style="font-size:0.85rem; font-weight:700; color:var(--primary);">
+            🔗 Linked Parallel Class
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-sync-lesson-now" style="font-weight:700;">
+            🔄 Sync Lesson to Linked Class(es)
+          </button>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
+          <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-lesson">Save Lesson</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Link Parallel Classes -->
+  <div id="modal-link-classes-backdrop" class="modal-backdrop">
+    <div class="modal" style="max-width: 520px;">
+      <div class="modal-header">
+        <div class="modal-title" style="display:flex; align-items:center; gap:0.5rem; color:var(--primary);">
+          <span>🔗</span>
+          <span>Link Parallel Classes</span>
+        </div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div style="padding: 0.5rem 0;">
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">
+          Link classes taking the same curriculum (e.g. <strong>7MAE1 🔗 7MAE2</strong>). When homework or lessons are updated in one class, they will automatically sync to linked classes (while preserving each class's timetable dates).
+        </p>
+        <div id="link-classes-body" style="display:flex; flex-direction:column; gap:0.75rem;">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem;">
+        <button type="button" class="btn btn-secondary modal-close">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Sync Curriculum Options -->
+  <div id="modal-sync-options-backdrop" class="modal-backdrop">
+    <div class="modal" style="max-width: 500px;">
+      <div class="modal-header">
+        <div class="modal-title" style="display:flex; align-items:center; gap:0.5rem; color:var(--primary);">
+          <span>🔄</span>
+          <span>Sync Linked Curriculum Options</span>
+        </div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div style="padding: 0.5rem 0;">
+        <p id="sync-modal-subtitle" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">
+          Select items and date scope to sync to linked parallel class(es).
+        </p>
+
+        <div style="font-weight:700; font-size:0.85rem; color:var(--text-main); margin-bottom:0.5rem;">Select Content to Sync:</div>
+        <div style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1.25rem;">
+          <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; font-weight:700; cursor:pointer;">
+            <input type="checkbox" id="sync-opt-classwork" checked>
+            <span>📄 Homework & Classwork Tasks</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; font-weight:700; cursor:pointer;">
+            <input type="checkbox" id="sync-opt-titles" checked>
+            <span>📖 Lesson Titles & Units</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; font-weight:700; cursor:pointer;">
+            <input type="checkbox" id="sync-opt-content" checked>
+            <span>📝 Teaching Notes & Content</span>
+          </label>
+        </div>
+
+        <div style="font-weight:700; font-size:0.85rem; color:var(--text-main); margin-bottom:0.5rem;">Select Lesson Range:</div>
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+          <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; cursor:pointer;">
+            <input type="radio" name="sync-scope" value="all" checked>
+            <span>All Lessons (Full Curriculum)</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; cursor:pointer;">
+            <input type="radio" name="sync-scope" value="future">
+            <span>Only Lessons After Lock Threshold (Future Schedule)</span>
+          </label>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.5rem;">
+        <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-execute-sync-options">🔄 Start Sync</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: View Lesson Details & Copy -->
+  <div id="modal-view-lesson-backdrop" class="modal-backdrop">
+    <div class="modal" style="max-width: 650px;">
+      <div class="modal-header">
+        <div class="modal-title" id="view-lesson-modal-title">📖 Lesson Plan Details</div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div id="view-lesson-modal-body">
+        <!-- Dynamic Lesson Content -->
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-top:1.5rem;">
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-primary" id="btn-copy-lesson-details">📋 Copy Details</button>
+          <button class="btn btn-secondary" id="btn-viewer-edit-lesson">✏️ Edit Lesson</button>
+          <button class="btn btn-secondary" id="btn-viewer-toggle-pin">📌 Pin / Unpin</button>
+        </div>
+        <button class="btn btn-secondary modal-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Conflict Resolver -->
+  <div id="modal-conflict-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">⚡ Interactive Pacing Conflict Resolver</div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div id="conflict-modal-body">
+        <!-- Rendered dynamically -->
+      </div>
+      <div style="display:flex; justify-content:flex-end; margin-top:1.5rem;">
+        <button class="btn btn-secondary modal-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Reset Data Warning & Backup Prompt -->
+  <div id="modal-reset-warning-backdrop" class="modal-backdrop">
+    <div class="modal" style="max-width: 540px;">
+      <div class="modal-header" style="border-bottom-color: var(--danger);">
+        <div class="modal-title" style="color: var(--danger); display:flex; align-items:center; gap:0.5rem;">
+          <span style="font-size:1.4rem;">⚠️</span>
+          <span>Reset All App Data?</span>
+        </div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div style="padding: 1rem 0;">
+        <p style="font-size: 0.9rem; line-height: 1.5; color: var(--text-main); margin-bottom: 1rem;">
+          Resetting will <strong>permanently erase</strong> all your custom classes, timetable rotations, curriculum lesson plans, blockout events, and term dates, restoring default sample data.
+        </p>
+        <div style="background: var(--primary-light); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.85rem 1rem; color: var(--primary-text); font-size: 0.85rem; font-weight: 600; display:flex; align-items:center; gap:0.75rem;">
+          <span style="font-size:1.5rem;">📥</span>
+          <div>
+            <strong>Save your work first!</strong><br>
+            Download a JSON backup file so you can easily restore your setup anytime later.
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-top: 1rem; flex-wrap:wrap;">
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-reset-download-backup">📥 Download Backup First</button>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn btn-secondary btn-sm modal-close">Cancel</button>
+          <button type="button" class="btn btn-danger btn-sm" id="btn-confirm-reset-data">🚨 Confirm Reset</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Whiteboard Presentation Mode Overlay (Req 3) -->
+  <div id="modal-whiteboard-backdrop" class="modal-backdrop whiteboard-backdrop">
+    <div class="modal whiteboard-modal">
+      <div class="modal-header whiteboard-header">
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+          <span style="font-size: 2rem;">📺</span>
+          <div>
+            <div class="modal-title whiteboard-title" id="whiteboard-modal-title">Classwork & Homework — Whiteboard Display</div>
+            <div id="whiteboard-modal-subtitle" class="whiteboard-subtitle">Student Projector View</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:0.25rem; background:var(--bg-subtle); padding:0.2rem 0.5rem; border-radius:8px; border:1px solid var(--border-color);">
+            <span style="font-size:0.78rem; font-weight:700; color:var(--text-muted); margin-right:0.2rem;">Text Size:</span>
+            <button type="button" class="btn btn-secondary btn-xs" id="btn-wb-zoom-out" title="Decrease font size">A-</button>
+            <span id="wb-zoom-label" style="font-size:0.8rem; font-weight:700; padding:0 0.3rem; color:var(--primary);">100%</span>
+            <button type="button" class="btn btn-secondary btn-xs" id="btn-wb-zoom-in" title="Increase font size">A+</button>
+            <button type="button" class="btn btn-secondary btn-xs" id="btn-wb-zoom-auto" title="Auto-fit font size to fill screen height">⚡ Auto Fit</button>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-wb-layout" title="Toggle between Bubbled Cards/Pills and Vertical List layout">🫧 Bubbles</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-whiteboard-theme" title="Toggle Light/Dark Theme">🌙 Dark</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-fullscreen-whiteboard" title="Toggle True Fullscreen Mode">⛶ Fullscreen</button>
+          <button class="modal-close" style="font-size: 2.2rem; line-height: 1;">&times;</button>
+        </div>
+      </div>
+
+      <!-- Whiteboard Lesson Progress Selector -->
+      <div class="whiteboard-bar">
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+          <span class="whiteboard-bar-title">📍 Progress Filter (Lessons Taught):</span>
+          <span id="whiteboard-progress-label" class="whiteboard-bar-label">All Lessons</span>
+        </div>
+        <div id="whiteboard-progress-buttons" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Whiteboard Presentation Body -->
+      <div id="whiteboard-modal-body" class="whiteboard-body">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div class="whiteboard-footer">
+        <span class="whiteboard-footer-tip">💡 Pro Tip: Select which lesson of the week your class is up to to hide upcoming un-taught tasks.</span>
+        <button type="button" class="btn btn-secondary modal-close">Exit Whiteboard Mode</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Settings Cog (Tutorial, Backup, Restore, Reset Data) -->
+  <div id="modal-settings-backdrop" class="modal-backdrop">
+    <div class="modal" style="max-width: 560px;">
+      <div class="modal-header">
+        <div class="modal-title" style="display:flex; align-items:center; gap:0.5rem; color:var(--primary);">
+          <span>⚙️</span>
+          <span>Application Settings & Data Tools</span>
+        </div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:1.25rem; margin-top:1rem;">
+        <!-- Appearance & Accent Theme Setting -->
+        <div style="background:var(--bg-subtle); border:1px solid var(--border-color); padding:1rem; border-radius:var(--radius-md);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+            <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:0.4rem;">
+              <span>🎨</span> Appearance & Accent Theme
+            </h4>
+            <span style="font-size:0.75rem; font-weight:700; color:var(--text-muted); background:var(--bg-surface); padding:0.15rem 0.55rem; border-radius:var(--radius-full); border:1px solid var(--border-color);">Separate from Class Colors</span>
+          </div>
+          <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem;">Select your preferred UI accent theme for navigation, action buttons, and active indicators.</p>
+          <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="accent-swatch-btn" data-accent="blue" style="background:#366482; width:32px; height:32px;" title="River Slate & Denim (Blue)"></button>
+            <button type="button" class="accent-swatch-btn" data-accent="orange" style="background:#c05638; width:32px; height:32px;" title="Terracotta & Rust Clay (Orange)"></button>
+            <button type="button" class="accent-swatch-btn" data-accent="green" style="background:#38734e; width:32px; height:32px;" title="Sage & Forest (Green)"></button>
+            <button type="button" class="accent-swatch-btn" data-accent="pink" style="background:#b84e72; width:32px; height:32px;" title="Dusty Rose & Blush (Pink)"></button>
+            <button type="button" class="accent-swatch-btn" data-accent="yellow" style="background:#b87320; width:32px; height:32px;" title="Honey Amber & Ochre (Yellow)"></button>
+            <button type="button" class="accent-swatch-btn" data-accent="red" style="background:#b83a3a; width:32px; height:32px;" title="Crimson Brick (Red)"></button>
+            <button type="button" class="accent-swatch-btn" data-accent="purple" style="background:#7d4e8d; width:32px; height:32px;" title="Warm Plum & Violet (Purple)"></button>
+          </div>
+        </div>
+
+        <div style="background:var(--bg-subtle); border:1px solid var(--border-color); padding:1rem; border-radius:var(--radius-md);">
+          <h4 style="font-size:0.95rem; font-weight:700; margin-bottom:0.35rem; color:var(--text-main);">🎓 Interactive Walkthrough Tutorial</h4>
+          <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem;">Launch step-by-step guided spotlight tour of Timetable and Planner.</p>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-settings-tutorial">🎓 Launch Interactive Tutorial</button>
+        </div>
+
+        <!-- Persistent Storage & Redundancy -->
+        <div style="background:var(--bg-subtle); border:1px solid var(--border-color); padding:1rem; border-radius:var(--radius-md);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+            <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:0.4rem;">
+              <span>🛡️</span> Persistent Storage & Reliability
+            </h4>
+            <span id="storage-persist-badge" style="font-size:0.75rem; font-weight:700; padding:0.15rem 0.55rem; border-radius:var(--radius-full); border:1px solid var(--border-color); background:var(--bg-surface); color:var(--text-muted);">Checking...</span>
+          </div>
+          <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem;">Your data is saved locally on your device with dual-layer redundancy (LocalStorage + IndexedDB). Persistent storage prevents browsers from clearing your timetable during low disk space.</p>
+          <div style="display:flex; flex-direction:column; gap:0.4rem; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem; background:var(--bg-surface); padding:0.6rem; border-radius:var(--radius-sm); border:1px solid var(--border-color);">
+            <div style="display:flex; justify-content:space-between;">
+              <span>Dual Storage Engines:</span>
+              <strong style="color:var(--text-main);" id="storage-engine-status">LocalStorage + IndexedDB Active</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span>Storage Quota / Usage:</span>
+              <span id="storage-usage-status">Calculating...</span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span>Eviction Protection:</span>
+              <span id="storage-protection-status">Checking...</span>
+            </div>
+          </div>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-request-persistence">🛡️ Request Persistent Storage</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-verify-storage">🔄 Verify & Sync Storage</button>
+          </div>
+        </div>
+
+        <div style="background:var(--bg-subtle); border:1px solid var(--border-color); padding:1rem; border-radius:var(--radius-md);">
+          <h4 style="font-size:0.95rem; font-weight:700; margin-bottom:0.35rem; color:var(--text-main);">💾 Backup & Restore Data</h4>
+          <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem;">Export your terms, classes, lessons, and timetable rotation to a JSON backup file or restore from a backup.</p>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-settings-backup">💾 Download Backup (JSON)</button>
+            <label class="btn btn-secondary btn-sm" style="cursor: pointer; margin: 0;">
+              📥 Restore JSON File
+              <input type="file" id="settings-input-restore-json" accept=".json" style="display: none;">
+            </label>
+          </div>
+        </div>
+
+        <div style="background:var(--danger-light); border:1px solid var(--danger); padding:1rem; border-radius:var(--radius-md);">
+          <h4 style="font-size:0.95rem; font-weight:700; margin-bottom:0.35rem; color:var(--danger);">🚨 Reset Application Data</h4>
+          <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem;">Reset all terms, classes, lessons, and timetable rotation back to clean sample defaults.</p>
+          <button type="button" class="btn btn-danger btn-sm" id="btn-settings-reset">🚨 Reset Data to Defaults</button>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; margin-top:1.5rem;">
+        <button type="button" class="btn btn-secondary modal-close">Close Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main JavaScript Engine & UI Controller -->
+  <script src="js/app.js"></script>
+
+  <!-- URL View & Theme Parameter Helper for Headless Inspection & Deep Linking -->
+  <script>
+    (function() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const targetView = params.get('view');
+        const targetModal = params.get('modal');
+        const targetTheme = params.get('theme');
+        const targetAccent = params.get('accent');
+
+        if (targetTheme) document.body.setAttribute('data-theme', targetTheme);
+        if (targetAccent) document.body.setAttribute('data-accent', targetAccent);
+
+        if (params.get('notour') || targetModal || params.get('popover')) {
+          try {
+            const raw = localStorage.getItem('aus_teacher_timetabler_state_v3');
+            let data = raw ? JSON.parse(raw) : {};
+            data.tutorialCompleted = true;
+            localStorage.setItem('aus_teacher_timetabler_state_v3', JSON.stringify(data));
+          } catch(e){}
+        }
+
+        function handleDeepLinks() {
+          if (targetView) {
+            const btn = document.querySelector('.nav-btn[data-view="' + targetView + '"]');
+            if (btn) btn.click();
+          }
+          if (targetModal) {
+            const modalEl = document.getElementById('modal-' + targetModal + '-backdrop') || document.getElementById(targetModal);
+            if (modalEl) modalEl.classList.add('active');
+            const mBtn = document.getElementById(targetModal) || document.getElementById('btn-open-' + targetModal) || document.getElementById('btn-open-' + targetModal + '-modal');
+            if (mBtn) mBtn.click();
+          }
+          if (params.get('popover') === 'accent') {
+            const pop = document.getElementById('header-accent-popover');
+            if (pop) pop.classList.remove('hidden');
+          }
+          if (params.get('notour') || targetModal || params.get('popover')) {
+            const elIds = ['tour-backdrop', 'tour-ring', 'tour-tooltip'];
+            elIds.forEach(id => {
+              const el = document.getElementById(id);
+              if (el) el.remove();
+            });
+            try { if (typeof SpotlightTour !== 'undefined') SpotlightTour.finish(); } catch(e){}
+          }
+        }
+
+        if (targetView || targetModal || params.get('popover')) {
+          window.addEventListener('DOMContentLoaded', function() {
+            handleDeepLinks();
+            setTimeout(handleDeepLinks, 100);
+          });
+        }
+      } catch (e) {}
+    })();
+  </script>
+</body>
+</html>
