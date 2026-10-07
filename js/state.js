@@ -248,7 +248,21 @@ export class StateStore {
     try {
       if (typeof localStorage !== 'undefined') {
         const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) return JSON.parse(stored);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === 'object') {
+            const def = this.getDefaultState();
+            return {
+              ...def,
+              ...parsed,
+              terms: (Array.isArray(parsed.terms) && parsed.terms.length > 0) ? parsed.terms : def.terms,
+              classes: (Array.isArray(parsed.classes) && parsed.classes.length > 0) ? parsed.classes : def.classes,
+              periods: (Array.isArray(parsed.periods) && parsed.periods.length > 0) ? parsed.periods : def.periods,
+              timetableSlots: (parsed.timetableSlots && Object.keys(parsed.timetableSlots).length > 0) ? parsed.timetableSlots : def.timetableSlots,
+              lessonPlans: (parsed.lessonPlans && Object.keys(parsed.lessonPlans).length > 0) ? parsed.lessonPlans : def.lessonPlans,
+            };
+          }
+        }
       }
     } catch (err) {
       console.warn('Could not read localStorage', err);

@@ -256,7 +256,21 @@
     loadState() {
       try {
         const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) return JSON.parse(stored);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === 'object') {
+            const def = this.getDefaultState();
+            return {
+              ...def,
+              ...parsed,
+              terms: (Array.isArray(parsed.terms) && parsed.terms.length > 0) ? parsed.terms : def.terms,
+              classes: (Array.isArray(parsed.classes) && parsed.classes.length > 0) ? parsed.classes : def.classes,
+              periods: (Array.isArray(parsed.periods) && parsed.periods.length > 0) ? parsed.periods : def.periods,
+              timetableSlots: (parsed.timetableSlots && Object.keys(parsed.timetableSlots).length > 0) ? parsed.timetableSlots : def.timetableSlots,
+              lessonPlans: (parsed.lessonPlans && Object.keys(parsed.lessonPlans).length > 0) ? parsed.lessonPlans : def.lessonPlans,
+            };
+          }
+        }
       } catch (err) {
         console.warn('Could not read localStorage', err);
       }
@@ -3807,6 +3821,12 @@
     ],
 
     init() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('notour') || urlParams.get('view') || urlParams.get('modal')) {
+          return;
+        }
+      } catch(e) {}
       if (!state.data.tutorialCompleted) {
         setTimeout(() => this.start(), 400);
       }
@@ -5161,7 +5181,8 @@
     }
   }
 
-  let activeViewId = 'terms';
+  const _urlParamsInit = (typeof window !== 'undefined') ? new URLSearchParams(window.location.search) : null;
+  let activeViewId = (_urlParamsInit && ['terms', 'timetable', 'lessons', 'master', 'homework'].includes(_urlParamsInit.get('view'))) ? _urlParamsInit.get('view') : 'terms';
   const dirtyViews = new Set(['terms', 'timetable', 'lessons', 'master', 'homework']);
 
   function renderViewIfDirty(viewId) {
@@ -5286,22 +5307,34 @@
     }
   }
 
+  function switchView(targetView) {
+    if (!targetView || !['terms', 'timetable', 'lessons', 'master', 'homework'].includes(targetView)) return;
+    activeViewId = targetView;
+    const navButtons = document.querySelectorAll('.app-nav .nav-btn');
+    navButtons.forEach(b => {
+      if (b.getAttribute('data-view') === targetView) {
+        b.classList.add('active');
+      } else {
+        b.classList.remove('active');
+      }
+    });
+
+    document.querySelectorAll('.view-panel').forEach(panel => {
+      panel.classList.remove('active');
+    });
+    const targetPanel = document.getElementById(`view-${targetView}`);
+    if (targetPanel) targetPanel.classList.add('active');
+
+    renderViewIfDirty(targetView);
+  }
+  window.switchView = switchView;
+
   function bindGlobalEvents() {
     const navButtons = document.querySelectorAll('.app-nav .nav-btn');
     navButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         const targetView = btn.getAttribute('data-view');
-        activeViewId = targetView;
-        navButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        document.querySelectorAll('.view-panel').forEach(panel => {
-          panel.classList.remove('active');
-        });
-        const targetPanel = document.getElementById(`view-${targetView}`);
-        if (targetPanel) targetPanel.classList.add('active');
-
-        renderViewIfDirty(targetView);
+        switchView(targetView);
       });
     });
 
@@ -5938,6 +5971,25 @@
     PeriodConfigUI.bindEvents();
     bindGlobalEvents();
     updateCurrentDateDisplay();
+
+    // Check URL parameters for view navigation & deep linking
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const targetView = urlParams.get('view');
+      if (targetView && ['terms', 'timetable', 'lessons', 'master', 'homework'].includes(targetView)) {
+        switchView(targetView);
+      }
+      const targetModal = urlParams.get('modal');
+      if (targetModal === 'settings') {
+        const modal = document.getElementById('modal-settings-backdrop');
+        if (modal) {
+          modal.classList.add('active');
+          state.updateStorageUI();
+        }
+      } else if (targetModal === 'whiteboard') {
+        HomeworkUI.openWhiteboardModal();
+      }
+    } catch(e) {}
 
     SpotlightTour.init();
   });

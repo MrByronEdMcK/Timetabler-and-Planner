@@ -1,6 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
+<html lang="en"><head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Timetable and Planner</title>
@@ -23,20 +22,16 @@
           document.documentElement.setAttribute('data-accent', targetAccent);
         }
         if (params.get('notour') || params.get('modal') || params.get('popover')) {
-          try {
-            const raw = localStorage.getItem('aus_teacher_timetabler_state_v3');
-            if (raw) {
-              let data = JSON.parse(raw);
-              data.tutorialCompleted = true;
-              localStorage.setItem('aus_teacher_timetabler_state_v3', JSON.stringify(data));
-            }
-          } catch(e) {}
+          const raw = localStorage.getItem('aus_teacher_timetabler_state_v3');
+          let data = raw ? JSON.parse(raw) : {};
+          data.tutorialCompleted = true;
+          localStorage.setItem('aus_teacher_timetabler_state_v3', JSON.stringify(data));
         }
       } catch(e) {}
     })();
   </script>
 </head>
-<body>
+<body data-theme="light" data-accent="blue">
   <!-- Dedicated Multi-Week Print Container (Only visible during print) -->
   <div id="print-multiweek-container" class="print-only"></div>
 
@@ -47,13 +42,13 @@
         <div class="brand-icon">🦘</div>
         <div>
           <h1 class="brand-title">Timetable and Planner</h1>
-          <div class="brand-subtitle">Interactive Annual Pacing & Curriculum Rotation Engine</div>
+          <div class="brand-subtitle">Interactive Annual Pacing &amp; Curriculum Rotation Engine</div>
         </div>
       </div>
 
       <div class="header-actions">
         <!-- Light / Dark Theme Mode Toggle -->
-        <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-theme" title="Toggle between Dark and Light visual mode">🌙 Dark</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-theme" title="Switch to Dark Mode">☀️ Light</button>
 
         <!-- Quick Accent Color Picker -->
         <div class="header-accent-wrapper">
@@ -64,13 +59,13 @@
           <div id="header-accent-popover" class="accent-popover hidden">
             <div class="accent-popover-title">Accent Theme</div>
             <div class="accent-swatches-grid">
-              <button type="button" class="accent-swatch-btn" data-accent="blue" style="background:#366482;" title="River Slate & Denim (Blue)"></button>
-              <button type="button" class="accent-swatch-btn" data-accent="orange" style="background:#c05638;" title="Terracotta & Rust Clay (Orange)"></button>
-              <button type="button" class="accent-swatch-btn" data-accent="green" style="background:#38734e;" title="Sage & Forest (Green)"></button>
-              <button type="button" class="accent-swatch-btn" data-accent="pink" style="background:#b84e72;" title="Dusty Rose & Blush (Pink)"></button>
-              <button type="button" class="accent-swatch-btn" data-accent="yellow" style="background:#b87320;" title="Honey Amber & Ochre (Yellow)"></button>
+              <button type="button" class="accent-swatch-btn active" data-accent="blue" style="background:#366482;" title="River Slate &amp; Denim (Blue)"></button>
+              <button type="button" class="accent-swatch-btn" data-accent="orange" style="background:#c05638;" title="Terracotta &amp; Rust Clay (Orange)"></button>
+              <button type="button" class="accent-swatch-btn" data-accent="green" style="background:#38734e;" title="Sage &amp; Forest (Green)"></button>
+              <button type="button" class="accent-swatch-btn" data-accent="pink" style="background:#b84e72;" title="Dusty Rose &amp; Blush (Pink)"></button>
+              <button type="button" class="accent-swatch-btn" data-accent="yellow" style="background:#b87320;" title="Honey Amber &amp; Ochre (Yellow)"></button>
               <button type="button" class="accent-swatch-btn" data-accent="red" style="background:#b83a3a;" title="Crimson Brick (Red)"></button>
-              <button type="button" class="accent-swatch-btn" data-accent="purple" style="background:#7d4e8d;" title="Warm Plum & Violet (Purple)"></button>
+              <button type="button" class="accent-swatch-btn" data-accent="purple" style="background:#7d4e8d;" title="Warm Plum &amp; Violet (Purple)"></button>
             </div>
           </div>
         </div>
@@ -82,10 +77,10 @@
         </button>
 
         <!-- Settings Cog Button -->
-        <button type="button" class="btn btn-secondary btn-sm" id="btn-open-settings-modal" title="Settings & Data Management">⚙️ Settings</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-open-settings-modal" title="Settings &amp; Data Management">⚙️ Settings</button>
 
         <!-- Current Date Lock Boundary -->
-        <div class="current-date-badge" title="Edits and reschedules only modify lessons after this date. Past lessons remain locked.">
+        <div class="current-date-badge" title="Edits and reschedules only modify lessons after this date. Past lessons remain locked." style="display:flex; align-items:center; gap:0.4rem;">
           <span>🔒 Lock Threshold:</span>
           <input type="date" id="current-date-input" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; font-size: 0.8rem; background: var(--bg-surface); color: inherit; border: 1px solid var(--border-color);">
           <span id="lock-sync-status-container"></span>
@@ -95,11 +90,11 @@
 
     <!-- App Navigation Tabs -->
     <nav class="app-nav">
-      <button class="nav-btn active" data-view="terms">📅 1. Terms & Events</button>
+      <button class="nav-btn active" data-view="terms">📅 1. Terms &amp; Events</button>
       <button class="nav-btn" data-view="timetable">🧩 2. Timetable Rotation</button>
-      <button class="nav-btn" data-view="lessons">📚 3. Curriculum & Lessons</button>
-      <button class="nav-btn" data-view="master">🎯 4. Master Pacing & Calendar</button>
-      <button class="nav-btn" data-view="homework">📝 5. Weekly Homework & Summary</button>
+      <button class="nav-btn" data-view="lessons">📚 3. Curriculum &amp; Lessons</button>
+      <button class="nav-btn" data-view="master">🎯 4. Master Pacing &amp; Calendar</button>
+      <button class="nav-btn" data-view="homework">📝 5. Weekly Homework &amp; Summary</button>
     </nav>
 
     <!-- VIEW 1: Terms & Events -->
@@ -116,7 +111,22 @@
         </p>
 
         <!-- Academic School Year Selector Container -->
-        <div id="academic-year-container" style="margin-bottom: 1.25rem;"></div>
+        <div id="academic-year-container" style="margin-bottom: 1.25rem;">
+          <div class="academic-year-banner" style="display:flex; align-items:center; justify-content:space-between; padding:0.75rem 1.15rem; border-radius:var(--radius-md); border:1px solid var(--border-color); flex-wrap:wrap; gap:0.75rem;">
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+              <span style="font-size:1.3rem;">🎓</span>
+              <div>
+                <div style="font-weight:700; font-size:0.9rem; color:var(--text-main);">Academic School Year</div>
+                <div style="font-size:0.78rem; color:var(--text-muted);">Changing the school year shifts all term dates automatically.</div>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-year-prev" title="Previous Year" style="padding:0.25rem 0.6rem; font-weight:800;">◀</button>
+              <input type="text" inputmode="numeric" pattern="[0-9]*" id="input-academic-year" class="form-control" style="width:75px; text-align:center; font-weight:800; font-size:1rem; color:var(--primary); border-color:var(--primary); padding:0.25rem 0.4rem;" value="2026">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-year-next" title="Next Year" style="padding:0.25rem 0.6rem; font-weight:800;">▶</button>
+            </div>
+          </div>
+        </div>
 
         <div id="term-cards-container" class="term-cards-grid">
           <!-- Rendered dynamically -->
@@ -152,12 +162,12 @@
             <label class="form-label" style="margin:0;">Rotation Cycle:</label>
             <select id="timetable-cycle-select" class="form-control" style="width: auto; padding:0.35rem 0.75rem;">
               <option value="1">1-Week Timetable</option>
-              <option value="2" selected>2-Week Timetable (Week A / Week B)</option>
+              <option value="2" selected="">2-Week Timetable (Week A / Week B)</option>
               <option value="3">3-Week Timetable (Week A / B / C)</option>
               <option value="4">4-Week Timetable (Week A / B / C / D)</option>
             </select>
             <!-- Requirement 2: Configure Periods Button -->
-            <button class="btn btn-secondary btn-sm" id="btn-open-period-config">⚙️ Periods & Times</button>
+            <button class="btn btn-secondary btn-sm" id="btn-open-period-config">⚙️ Periods &amp; Times</button>
             <!-- Print A4 Timetable Button in View 2 -->
             <button class="btn btn-secondary btn-sm" id="btn-print-timetable" title="Print clean landscape A4 timetable">🖨️ Print A4 Timetable</button>
           </div>
@@ -245,7 +255,7 @@
         <div class="card-header" style="flex-wrap:wrap; gap:1rem;">
           <div class="card-title">
             <span class="card-title-icon">📝</span>
-            <span>Weekly Classwork & Homework Tracker</span>
+            <span>Weekly Classwork &amp; Homework Tracker</span>
           </div>
           <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
             <button class="btn btn-secondary btn-sm" id="btn-homework-sync-week" title="Sync all homework for this week to linked parallel class(es)">🔄 Sync Week</button>
@@ -286,12 +296,12 @@
 
   <!-- Modal: Period Customization & Native HTML Time Inputs (Req 2) -->
   <div id="modal-period-backdrop" class="modal-backdrop">
-    <div class="modal" style="max-width: 780px; width: 100%;">
+    <div class="modal" style="max-width: 780px;">
       <div class="modal-header">
-        <div class="modal-title">⚙️ Period Configuration & Time Settings</div>
-        <button class="modal-close">&times;</button>
+        <div class="modal-title">⚙️ Period Configuration &amp; Time Settings</div>
+        <button class="modal-close">×</button>
       </div>
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.6rem; margin-bottom:1.25rem; background:var(--bg-subtle); border:1px solid var(--border-color); padding:0.85rem; border-radius:var(--radius-md);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; background:var(--bg-subtle); border:1px solid var(--border-color); padding:0.85rem; border-radius:var(--radius-md);">
         <div>
           <strong>Time Display Format</strong>
           <div style="font-size:0.8rem; color:var(--text-muted);">Toggle 12-hour (AM/PM) or 24-hour time</div>
@@ -302,9 +312,9 @@
         </select>
       </div>
 
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.75rem;">
-        <h4 style="font-size:0.95rem; font-weight:700;">Daily Period Sequence & Breaks</h4>
-        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+        <h4 style="font-size:0.95rem; font-weight:700;">Daily Period Sequence &amp; Breaks</h4>
+        <div style="display:flex; gap:0.5rem;">
           <button class="btn btn-secondary btn-sm" id="btn-add-new-period">+ Add Period</button>
           <button class="btn btn-secondary btn-sm" id="btn-add-new-break">+ Add Break (Recess/Lunch)</button>
         </div>
@@ -325,17 +335,17 @@
     <div class="modal">
       <div class="modal-header">
         <div class="modal-title">Add Blockout Event</div>
-        <button class="modal-close">&times;</button>
+        <button class="modal-close">×</button>
       </div>
       <form id="form-add-event">
         <div class="form-group">
           <label class="form-label">Event Title</label>
-          <input type="text" id="event-title" class="form-control" placeholder="e.g. Athletics Carnival, Year Assembly" required>
+          <input type="text" id="event-title" class="form-control" placeholder="e.g. Athletics Carnival, Year Assembly" required="">
         </div>
         <div class="grid-2">
           <div class="form-group">
             <label class="form-label">Date</label>
-            <input type="date" id="event-date" class="form-control" required>
+            <input type="date" id="event-date" class="form-control" required="">
           </div>
           <div class="form-group">
             <label class="form-label">Event Type</label>
@@ -351,7 +361,7 @@
         <div class="form-group">
           <label class="form-label">Scope</label>
           <div style="display:flex; gap:1rem; align-items:center;">
-            <label><input type="checkbox" id="event-block-allday" checked> Block Entire School Day</label>
+            <label><input type="checkbox" id="event-block-allday" checked=""> Block Entire School Day</label>
           </div>
         </div>
         <div class="grid-2">
@@ -385,7 +395,7 @@
     <div class="modal">
       <div class="modal-header">
         <div class="modal-title" id="slot-modal-title">Assign Class Slot</div>
-        <button class="modal-close">&times;</button>
+        <button class="modal-close">×</button>
       </div>
       <form id="form-assign-slot">
         <div class="form-group">
@@ -405,10 +415,10 @@
             <input type="color" id="slot-class-color-input" class="form-control" value="#3b82f6" style="height:42px;">
           </div>
         </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-top:1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.5rem;">
           <!-- Requirement 3: Dedicated Clear/Delete Slot Button -->
           <button type="button" class="btn btn-danger" id="btn-clear-slot">🗑️ Clear / Delete Slot</button>
-          <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+          <div style="display:flex; gap:0.75rem;">
             <button type="button" class="btn btn-secondary modal-close">Cancel</button>
             <button type="submit" class="btn btn-primary">Save Slot</button>
           </div>
@@ -422,13 +432,13 @@
     <div class="modal">
       <div class="modal-header">
         <div class="modal-title" id="lesson-modal-title">Add Lesson Plan</div>
-        <button class="modal-close">&times;</button>
+        <button class="modal-close">×</button>
       </div>
       <form id="form-add-lesson">
         <input type="hidden" id="lesson-id-input">
         <div class="form-group">
           <label class="form-label">Lesson Title</label>
-          <input type="text" id="lesson-title-input" class="form-control" placeholder="e.g. Introduction to Trigonometry OR 6G, 6H, 6I" required>
+          <input type="text" id="lesson-title-input" class="form-control" placeholder="e.g. Introduction to Trigonometry OR 6G, 6H, 6I" required="">
           <div style="font-size:0.75rem; color:var(--primary); font-weight:600; margin-top:0.25rem;">💡 Tip: Enter comma-separated titles (e.g. 6G, 6H, 6I) to add multiple lessons in sequence.</div>
         </div>
         <div class="form-group">
@@ -442,7 +452,7 @@
           <label><input type="checkbox" id="lesson-float-check"> 🎈 Tag as "Float" (Free / Buffer Lesson - Pruned FIRST during conflicts)</label>
           <label><input type="checkbox" id="lesson-revision-check"> ⭐ Tag as "Revision" Lesson (Pruned SECOND during conflicts)</label>
           <label><input type="checkbox" id="lesson-test-check"> 🎯 Tag as "Assessment / Test Milestone"</label>
-          <label><input type="checkbox" id="lesson-pin-check"> 📌 Pin to Calendar Date & Period Slot</label>
+          <label><input type="checkbox" id="lesson-pin-check"> 📌 Pin to Calendar Date &amp; Period Slot</label>
         </div>
         <div class="form-group classwork-section-container" id="lesson-test-slot-group" style="display: none;">
           <label class="form-label" style="color: var(--primary); font-weight: 700;">🎯 Assessment / Pin Slot</label>
@@ -464,7 +474,7 @@
 
         <div class="form-group classwork-section-container" style="margin-top:1.25rem;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
-            <label class="form-label" style="margin:0; font-weight:700; color:var(--primary);">📚 Classwork & Homework Tasks (3 Fields)</label>
+            <label class="form-label" style="margin:0; font-weight:700; color:var(--primary);">📚 Classwork &amp; Homework Tasks (3 Fields)</label>
             <button type="button" class="btn btn-secondary btn-xs" id="btn-add-classwork-row">+ Add Item</button>
           </div>
           <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.6rem;">
@@ -475,16 +485,16 @@
           </div>
           <datalist id="classwork-type-suggestions">
             <option value="Notes">
-            <option value="Textbook">
-            <option value="Worksheets">
-            <option value="Handout">
-            <option value="Practice Quiz">
-            <option value="Online Resource">
-          </datalist>
+            </option><option value="Textbook">
+            </option><option value="Worksheets">
+            </option><option value="Handout">
+            </option><option value="Practice Quiz">
+            </option><option value="Online Resource">
+          </option></datalist>
         </div>
 
         <div class="form-group" style="margin-top:1.25rem;">
-          <label class="form-label">Lesson Content & Teaching Notes</label>
+          <label class="form-label">Lesson Content &amp; Teaching Notes</label>
           <div class="rich-toolbar">
             <button type="button" class="rt-btn" data-cmd="bold" title="Bold Text"><b>B</b></button>
             <button type="button" class="rt-btn" data-cmd="italic" title="Italic Text"><i>I</i></button>
@@ -520,7 +530,7 @@
           <span>🔗</span>
           <span>Link Parallel Classes</span>
         </div>
-        <button class="modal-close">&times;</button>
+        <button class="modal-close">×</button>
       </div>
       <div style="padding: 0.5rem 0;">
         <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">
@@ -544,7 +554,7 @@
           <span>🔄</span>
           <span>Sync Linked Curriculum Options</span>
         </div>
-        <button class="modal-close">&times;</button>
+        <button class="modal-close">×</button>
       </div>
       <div style="padding: 0.5rem 0;">
         <p id="sync-modal-subtitle" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">
@@ -554,23 +564,23 @@
         <div style="font-weight:700; font-size:0.85rem; color:var(--text-main); margin-bottom:0.5rem;">Select Content to Sync:</div>
         <div style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1.25rem;">
           <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; font-weight:700; cursor:pointer;">
-            <input type="checkbox" id="sync-opt-classwork" checked>
-            <span>📄 Homework & Classwork Tasks</span>
+            <input type="checkbox" id="sync-opt-classwork" checked="">
+            <span>📄 Homework &amp; Classwork Tasks</span>
           </label>
           <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; font-weight:700; cursor:pointer;">
-            <input type="checkbox" id="sync-opt-titles" checked>
-            <span>📖 Lesson Titles & Units</span>
+            <input type="checkbox" id="sync-opt-titles" checked="">
+            <span>📖 Lesson Titles &amp; Units</span>
           </label>
           <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; font-weight:700; cursor:pointer;">
-            <input type="checkbox" id="sync-opt-content" checked>
-            <span>📝 Teaching Notes & Content</span>
+            <input type="checkbox" id="sync-opt-content" checked="">
+            <span>📝 Teaching Notes &amp; Content</span>
           </label>
         </div>
 
         <div style="font-weight:700; font-size:0.85rem; color:var(--text-main); margin-bottom:0.5rem;">Select Lesson Range:</div>
         <div style="display:flex; flex-direction:column; gap:0.5rem;">
           <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; cursor:pointer;">
-            <input type="radio" name="sync-scope" value="all" checked>
+            <input type="radio" name="sync-scope" value="all" checked="">
             <span>All Lessons (Full Curriculum)</span>
           </label>
           <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; cursor:pointer;">
@@ -591,7 +601,7 @@
     <div class="modal" style="max-width: 650px;">
       <div class="modal-header">
         <div class="modal-title" id="view-lesson-modal-title">📖 Lesson Plan Details</div>
-        <button class="modal-close">&times;</button>
+        <button class="modal-close">×</button>
       </div>
       <div id="view-lesson-modal-body">
         <!-- Dynamic Lesson Content -->
@@ -612,7 +622,7 @@
     <div class="modal">
       <div class="modal-header">
         <div class="modal-title">⚡ Interactive Pacing Conflict Resolver</div>
-        <button class="modal-close">&times;</button>
+        <button class="modal-close">×</button>
       </div>
       <div id="conflict-modal-body">
         <!-- Rendered dynamically -->
@@ -631,7 +641,7 @@
           <span style="font-size:1.4rem;">⚠️</span>
           <span>Reset All App Data?</span>
         </div>
-        <button class="modal-close">&times;</button>
+        <button class="modal-close">×</button>
       </div>
       <div style="padding: 1rem 0;">
         <p style="font-size: 0.9rem; line-height: 1.5; color: var(--text-main); margin-bottom: 1rem;">
@@ -662,7 +672,7 @@
         <div style="display:flex; align-items:center; gap:0.75rem;">
           <span style="font-size: 2rem;">📺</span>
           <div>
-            <div class="modal-title whiteboard-title" id="whiteboard-modal-title">Classwork & Homework — Whiteboard Display</div>
+            <div class="modal-title whiteboard-title" id="whiteboard-modal-title">Classwork &amp; Homework — Whiteboard Display</div>
             <div id="whiteboard-modal-subtitle" class="whiteboard-subtitle">Student Projector View</div>
           </div>
         </div>
@@ -675,9 +685,9 @@
             <button type="button" class="btn btn-secondary btn-xs" id="btn-wb-zoom-auto" title="Auto-fit font size to fill screen height">⚡ Auto Fit</button>
           </div>
           <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-wb-layout" title="Toggle between Bubbled Cards/Pills and Vertical List layout">🫧 Bubbles</button>
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-whiteboard-theme" title="Toggle Light/Dark Theme">🌙 Dark</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-whiteboard-theme" title="Switch to Dark Mode">☀️ Light</button>
           <button type="button" class="btn btn-secondary btn-sm" id="btn-fullscreen-whiteboard" title="Toggle True Fullscreen Mode">⛶ Fullscreen</button>
-          <button class="modal-close" style="font-size: 2.2rem; line-height: 1;">&times;</button>
+          <button class="modal-close" style="font-size: 2.2rem; line-height: 1;">×</button>
         </div>
       </div>
 
@@ -706,32 +716,32 @@
 
   <!-- Modal: Settings Cog (Tutorial, Backup, Restore, Reset Data) -->
   <div id="modal-settings-backdrop" class="modal-backdrop">
-    <div class="modal" style="max-width: 560px; width: 100%;">
+    <div class="modal" style="max-width: 560px;">
       <div class="modal-header">
-        <div class="modal-title" style="display:flex; align-items:center; gap:0.4rem; color:var(--primary); min-width:0; flex:1; flex-wrap:wrap;">
+        <div class="modal-title" style="display:flex; align-items:center; gap:0.5rem; color:var(--primary);">
           <span>⚙️</span>
-          <span>Application Settings & Data Tools</span>
+          <span>Application Settings &amp; Data Tools</span>
         </div>
-        <button class="modal-close">&times;</button>
+        <button class="modal-close">×</button>
       </div>
       <div style="display:flex; flex-direction:column; gap:1.25rem; margin-top:1rem;">
         <!-- Appearance & Accent Theme Setting -->
         <div style="background:var(--bg-subtle); border:1px solid var(--border-color); padding:1rem; border-radius:var(--radius-md);">
-          <div class="modal-section-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.35rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
             <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:0.4rem;">
-              <span>🎨</span> Appearance & Accent Theme
+              <span>🎨</span> Appearance &amp; Accent Theme
             </h4>
             <span style="font-size:0.75rem; font-weight:700; color:var(--text-muted); background:var(--bg-surface); padding:0.15rem 0.55rem; border-radius:var(--radius-full); border:1px solid var(--border-color);">Separate from Class Colors</span>
           </div>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem;">Select your preferred UI accent theme for navigation, action buttons, and active indicators.</p>
           <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-            <button type="button" class="accent-swatch-btn" data-accent="blue" style="background:#366482; width:32px; height:32px;" title="River Slate & Denim (Blue)"></button>
-            <button type="button" class="accent-swatch-btn" data-accent="orange" style="background:#c05638; width:32px; height:32px;" title="Terracotta & Rust Clay (Orange)"></button>
-            <button type="button" class="accent-swatch-btn" data-accent="green" style="background:#38734e; width:32px; height:32px;" title="Sage & Forest (Green)"></button>
-            <button type="button" class="accent-swatch-btn" data-accent="pink" style="background:#b84e72; width:32px; height:32px;" title="Dusty Rose & Blush (Pink)"></button>
-            <button type="button" class="accent-swatch-btn" data-accent="yellow" style="background:#b87320; width:32px; height:32px;" title="Honey Amber & Ochre (Yellow)"></button>
+            <button type="button" class="accent-swatch-btn active" data-accent="blue" style="background:#366482; width:32px; height:32px;" title="River Slate &amp; Denim (Blue)"></button>
+            <button type="button" class="accent-swatch-btn" data-accent="orange" style="background:#c05638; width:32px; height:32px;" title="Terracotta &amp; Rust Clay (Orange)"></button>
+            <button type="button" class="accent-swatch-btn" data-accent="green" style="background:#38734e; width:32px; height:32px;" title="Sage &amp; Forest (Green)"></button>
+            <button type="button" class="accent-swatch-btn" data-accent="pink" style="background:#b84e72; width:32px; height:32px;" title="Dusty Rose &amp; Blush (Pink)"></button>
+            <button type="button" class="accent-swatch-btn" data-accent="yellow" style="background:#b87320; width:32px; height:32px;" title="Honey Amber &amp; Ochre (Yellow)"></button>
             <button type="button" class="accent-swatch-btn" data-accent="red" style="background:#b83a3a; width:32px; height:32px;" title="Crimson Brick (Red)"></button>
-            <button type="button" class="accent-swatch-btn" data-accent="purple" style="background:#7d4e8d; width:32px; height:32px;" title="Warm Plum & Violet (Purple)"></button>
+            <button type="button" class="accent-swatch-btn" data-accent="purple" style="background:#7d4e8d; width:32px; height:32px;" title="Warm Plum &amp; Violet (Purple)"></button>
           </div>
         </div>
 
@@ -743,35 +753,35 @@
 
         <!-- Persistent Storage & Redundancy -->
         <div style="background:var(--bg-subtle); border:1px solid var(--border-color); padding:1rem; border-radius:var(--radius-md);">
-          <div class="modal-section-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.35rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
             <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:0.4rem;">
-              <span>🛡️</span> Persistent Storage & Reliability
+              <span>🛡️</span> Persistent Storage &amp; Reliability
             </h4>
-            <span id="storage-persist-badge" style="font-size:0.75rem; font-weight:700; padding:0.15rem 0.55rem; border-radius:var(--radius-full); border:1px solid var(--border-color); background:var(--bg-surface); color:var(--text-muted);">Checking...</span>
+            <span id="storage-persist-badge" style="font-size: 0.75rem; font-weight: 700; padding: 0.15rem 0.55rem; border-radius: var(--radius-full); border-color: var(--border-color); border-top-style: ; border-top-width: ; border-right-style: ; border-right-width: ; border-bottom-style: ; border-bottom-width: ; border-left-style: ; border-left-width: ; border-image-source: ; border-image-slice: ; border-image-width: ; border-image-outset: ; border-image-repeat: ; background: var(--bg-surface); color: var(--text-muted);">⚡ Standard (Best-Effort)</span>
           </div>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem;">Your data is saved locally on your device with dual-layer redundancy (LocalStorage + IndexedDB). Persistent storage prevents browsers from clearing your timetable during low disk space.</p>
-          <div class="storage-info-container" style="display:flex; flex-direction:column; gap:0.4rem; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem; background:var(--bg-surface); padding:0.6rem; border-radius:var(--radius-sm); border:1px solid var(--border-color);">
-            <div class="storage-info-row">
-              <span class="storage-info-label">Dual Storage Engines:</span>
-              <strong style="color:var(--text-main); word-break:break-word;" id="storage-engine-status">LocalStorage + IndexedDB Active</strong>
+          <div style="display:flex; flex-direction:column; gap:0.4rem; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem; background:var(--bg-surface); padding:0.6rem; border-radius:var(--radius-sm); border:1px solid var(--border-color);">
+            <div style="display:flex; justify-content:space-between;">
+              <span>Dual Storage Engines:</span>
+              <strong style="color:var(--text-main);" id="storage-engine-status">LocalStorage + IndexedDB (Dual Redundancy)</strong>
             </div>
-            <div class="storage-info-row">
-              <span class="storage-info-label">Storage Quota / Usage:</span>
-              <span id="storage-usage-status" style="word-break:break-word;">Calculating...</span>
+            <div style="display:flex; justify-content:space-between;">
+              <span>Storage Quota / Usage:</span>
+              <span id="storage-usage-status">Used: ~0.0 KB (Quota: ~10240 MB)</span>
             </div>
-            <div class="storage-info-row">
-              <span class="storage-info-label">Eviction Protection:</span>
-              <span id="storage-protection-status" style="word-break:break-word;">Checking...</span>
+            <div style="display:flex; justify-content:space-between;">
+              <span>Eviction Protection:</span>
+              <span id="storage-protection-status" style="color: var(--text-muted);">Standard (May be cleared if device storage is low)</span>
             </div>
           </div>
           <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
             <button type="button" class="btn btn-secondary btn-sm" id="btn-request-persistence">🛡️ Request Persistent Storage</button>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-verify-storage">🔄 Verify & Sync Storage</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-verify-storage">🔄 Verify &amp; Sync Storage</button>
           </div>
         </div>
 
         <div style="background:var(--bg-subtle); border:1px solid var(--border-color); padding:1rem; border-radius:var(--radius-md);">
-          <h4 style="font-size:0.95rem; font-weight:700; margin-bottom:0.35rem; color:var(--text-main);">💾 Backup & Restore Data</h4>
+          <h4 style="font-size:0.95rem; font-weight:700; margin-bottom:0.35rem; color:var(--text-main);">💾 Backup &amp; Restore Data</h4>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.75rem;">Export your terms, classes, lessons, and timetable rotation to a JSON backup file or restore from a backup.</p>
           <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
             <button type="button" class="btn btn-secondary btn-sm" id="btn-settings-backup">💾 Download Backup (JSON)</button>
@@ -821,14 +831,8 @@
 
         function handleDeepLinks() {
           if (targetView) {
-            document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.app-nav .nav-btn').forEach(b => b.classList.remove('active'));
-            const p = document.getElementById('view-' + targetView);
-            if (p) p.classList.add('active');
             const btn = document.querySelector('.nav-btn[data-view="' + targetView + '"]');
-            if (btn) btn.classList.add('active');
-            if (typeof switchView === 'function') switchView(targetView);
-            else if (btn) btn.click();
+            if (btn) btn.click();
           }
           if (targetModal) {
             const modalEl = document.getElementById('modal-' + targetModal + '-backdrop') || document.getElementById(targetModal);
@@ -851,7 +855,6 @@
         }
 
         if (targetView || targetModal || params.get('popover')) {
-          handleDeepLinks();
           window.addEventListener('load', function() {
             handleDeepLinks();
             setTimeout(handleDeepLinks, 50);
@@ -865,5 +868,6 @@
       } catch (e) {}
     })();
   </script>
-</body>
-</html>
+
+
+</body></html>

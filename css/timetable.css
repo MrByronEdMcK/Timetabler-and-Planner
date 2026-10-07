@@ -50,10 +50,12 @@
 
 .timetable-grid-wrapper {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
   background: var(--bg-surface);
   box-shadow: var(--shadow-sm);
+  width: 100%;
 }
 
 /* Equal Day Column Widths */
@@ -62,7 +64,7 @@
   table-layout: fixed;
   border-collapse: collapse;
   text-align: center;
-  min-width: 800px;
+  min-width: 760px;
 }
 
 .timetable-grid th, 
@@ -85,7 +87,7 @@
 
 /* Period Label Column */
 .period-header-col {
-  width: 150px !important;
+  width: 125px !important;
   background: var(--bg-subtle) !important;
   text-align: center;
 }
@@ -179,4 +181,99 @@
   color: var(--text-muted);
   text-transform: uppercase;
   background: var(--bg-subtle);
+}
+
+/* ==========================================================================
+   Timetable View Responsiveness (Tablets & Mobile)
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  .timetable-grid {
+    min-width: 650px;
+  }
+
+  .period-header-col {
+    width: 95px !important;
+  }
+
+  .period-name {
+    font-size: 0.82rem;
+  }
+
+  .period-time {
+    font-size: 0.68rem;
+  }
+
+  .timetable-grid th {
+    font-size: 0.78rem;
+    padding: 0.5rem 0.35rem;
+  }
+
+  .timetable-grid td {
+    padding: 0.35rem 0.25rem;
+  }
+
+  .tt-cell {
+    height: 64px;
+  }
+
+  .tt-class-name {
+    font-size: 0.8rem;
+  }
+
+  .tt-class-details {
+    font-size: 0.68rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .timetable-controls {
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .week-tab-btn {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+  }
+
+  .timetable-grid {
+    min-width: 560px;
+  }
+
+  .period-header-col {
+    width: 85px !important;
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    background: var(--bg-subtle) !important;
+    box-shadow: 2px 0 5px rgba(43, 37, 32, 0.08);
+  }
+
+  th.period-header-col {
+    position: sticky;
+    left: 0;
+    z-index: 6;
+    background: var(--bg-subtle) !important;
+  }
+
+  .period-name {
+    font-size: 0.76rem;
+  }
+
+  .period-time {
+    font-size: 0.65rem;
+  }
+
+  .tt-cell {
+    height: 58px;
+  }
+
+  .tt-class-name {
+    font-size: 0.76rem;
+  }
+
+  .tt-class-details {
+    font-size: 0.64rem;
+  }
 }
