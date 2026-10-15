@@ -252,14 +252,46 @@ export class StateStore {
           const parsed = JSON.parse(stored);
           if (parsed && typeof parsed === 'object') {
             const def = this.getDefaultState();
+            const year = parsed.academicYear ? parseInt(parsed.academicYear, 10) : (
+              (parsed.terms && parsed.terms.length > 0 && parsed.terms[0].startDate)
+                ? parseInt(parsed.terms[0].startDate.substring(0, 4), 10) || 2026
+                : 2026
+            );
+
+            const years = (parsed.years && typeof parsed.years === 'object') ? parsed.years : {};
+
+            if (!years[year]) {
+              years[year] = {
+                terms: (Array.isArray(parsed.terms) && parsed.terms.length > 0) ? parsed.terms : def.terms,
+                classes: Array.isArray(parsed.classes) ? parsed.classes : def.classes,
+                events: Array.isArray(parsed.events) ? parsed.events : def.events,
+                timetableSlots: parsed.timetableSlots || def.timetableSlots,
+                timetableSlotDetails: parsed.timetableSlotDetails || {},
+                lessonPlans: parsed.lessonPlans || def.lessonPlans,
+                timetableCycleWeeks: parsed.timetableCycleWeeks || 2,
+                currentDate: parsed.currentDate || `${year}-07-22`
+              };
+            }
+
+            if (!years[2026] && def.years[2026]) {
+              years[2026] = JSON.parse(JSON.stringify(def.years[2026]));
+            }
+
+            const curYrData = years[year];
+
             return {
               ...def,
               ...parsed,
-              terms: (Array.isArray(parsed.terms) && parsed.terms.length > 0) ? parsed.terms : def.terms,
-              classes: (Array.isArray(parsed.classes) && parsed.classes.length > 0) ? parsed.classes : def.classes,
-              periods: (Array.isArray(parsed.periods) && parsed.periods.length > 0) ? parsed.periods : def.periods,
-              timetableSlots: (parsed.timetableSlots && Object.keys(parsed.timetableSlots).length > 0) ? parsed.timetableSlots : def.timetableSlots,
-              lessonPlans: (parsed.lessonPlans && Object.keys(parsed.lessonPlans).length > 0) ? parsed.lessonPlans : def.lessonPlans,
+              academicYear: year,
+              currentDate: curYrData.currentDate || parsed.currentDate || `${year}-07-22`,
+              terms: curYrData.terms || def.terms,
+              classes: curYrData.classes || [],
+              events: curYrData.events || [],
+              timetableSlots: curYrData.timetableSlots || {},
+              timetableSlotDetails: curYrData.timetableSlotDetails || {},
+              lessonPlans: curYrData.lessonPlans || {},
+              timetableCycleWeeks: curYrData.timetableCycleWeeks || parsed.timetableCycleWeeks || 2,
+              years: years
             };
           }
         }
@@ -271,21 +303,59 @@ export class StateStore {
   }
 
   getDefaultState() {
+    const defaultYear = 2026;
+    const defaultTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS));
+    const defaultPeriods = JSON.parse(JSON.stringify(DEFAULT_PERIODS));
+    const defaultClasses = JSON.parse(JSON.stringify(DEFAULT_CLASSES));
+    const defaultEvents = JSON.parse(JSON.stringify(DEFAULT_EVENTS));
+    const defaultTimetableSlots = JSON.parse(JSON.stringify(DEFAULT_TIMETABLE_SLOTS));
+    const defaultLessonPlans = JSON.parse(JSON.stringify(DEFAULT_LESSON_PLANS));
+
     return {
       tutorialCompleted: false,
       timeFormat: '12h',
       currentDate: '2026-07-22',
+      academicYear: defaultYear,
       timetableCycleWeeks: 2,
-      terms: JSON.parse(JSON.stringify(DEFAULT_TERMS)),
-      periods: JSON.parse(JSON.stringify(DEFAULT_PERIODS)),
-      classes: JSON.parse(JSON.stringify(DEFAULT_CLASSES)),
-      events: JSON.parse(JSON.stringify(DEFAULT_EVENTS)),
-      timetableSlots: JSON.parse(JSON.stringify(DEFAULT_TIMETABLE_SLOTS)),
-      lessonPlans: JSON.parse(JSON.stringify(DEFAULT_LESSON_PLANS))
+      terms: defaultTerms,
+      periods: defaultPeriods,
+      classes: defaultClasses,
+      events: defaultEvents,
+      timetableSlots: defaultTimetableSlots,
+      timetableSlotDetails: {},
+      lessonPlans: defaultLessonPlans,
+      years: {
+        2026: {
+          terms: JSON.parse(JSON.stringify(defaultTerms)),
+          events: JSON.parse(JSON.stringify(defaultEvents)),
+          classes: JSON.parse(JSON.stringify(defaultClasses)),
+          timetableSlots: JSON.parse(JSON.stringify(defaultTimetableSlots)),
+          timetableSlotDetails: {},
+          lessonPlans: JSON.parse(JSON.stringify(defaultLessonPlans)),
+          timetableCycleWeeks: 2,
+          currentDate: '2026-07-22'
+        }
+      }
+    };
+  }
+
+  syncCurrentYearToYears() {
+    const yr = this.academicYear;
+    if (!this.data.years) this.data.years = {};
+    this.data.years[yr] = {
+      terms: JSON.parse(JSON.stringify(this.data.terms || [])),
+      events: JSON.parse(JSON.stringify(this.data.events || [])),
+      classes: JSON.parse(JSON.stringify(this.data.classes || [])),
+      timetableSlots: JSON.parse(JSON.stringify(this.data.timetableSlots || {})),
+      timetableSlotDetails: JSON.parse(JSON.stringify(this.data.timetableSlotDetails || {})),
+      lessonPlans: JSON.parse(JSON.stringify(this.data.lessonPlans || {})),
+      timetableCycleWeeks: this.data.timetableCycleWeeks || 2,
+      currentDate: this.data.currentDate || `${yr}-07-22`
     };
   }
 
   saveState() {
+    this.syncCurrentYearToYears();
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
@@ -305,6 +375,7 @@ export class StateStore {
     this.data.events = [];
     this.data.classes = [];
     this.data.timetableSlots = {};
+    this.data.timetableSlotDetails = {};
     this.data.lessonPlans = {};
     this.data.tutorialCompleted = true;
     this.saveState();
@@ -351,22 +422,46 @@ export class StateStore {
   }
 
   setAcademicYear(newYear) {
-    const yrStr = String(newYear);
-    this.data.academicYear = parseInt(newYear, 10);
+    const yr = parseInt(newYear, 10);
+    if (isNaN(yr) || yr < 2020 || yr > 2035) return;
+    if (yr === this.data.academicYear && this.data.years && this.data.years[yr]) return;
 
-    if (this.data.terms) {
-      this.data.terms.forEach(term => {
-        if (term.startDate) {
-          term.startDate = term.startDate.replace(/^\d{4}/, yrStr);
-        }
-        if (term.endDate) {
-          term.endDate = term.endDate.replace(/^\d{4}/, yrStr);
-        }
-      });
-    }
+    // First sync current year's state into years[oldYear]
+    this.syncCurrentYearToYears();
 
-    if (this.data.currentDate) {
-      this.data.currentDate = this.data.currentDate.replace(/^\d{4}/, yrStr);
+    this.data.academicYear = yr;
+    if (!this.data.years) this.data.years = {};
+
+    if (this.data.years[yr]) {
+      // Existing year! Restore its scoped data
+      const yrData = this.data.years[yr];
+      this.data.terms = JSON.parse(JSON.stringify(yrData.terms || []));
+      this.data.events = JSON.parse(JSON.stringify(yrData.events || []));
+      this.data.classes = JSON.parse(JSON.stringify(yrData.classes || []));
+      this.data.timetableSlots = JSON.parse(JSON.stringify(yrData.timetableSlots || {}));
+      this.data.timetableSlotDetails = JSON.parse(JSON.stringify(yrData.timetableSlotDetails || {}));
+      this.data.lessonPlans = JSON.parse(JSON.stringify(yrData.lessonPlans || {}));
+      this.data.timetableCycleWeeks = yrData.timetableCycleWeeks || 2;
+      this.data.currentDate = yrData.currentDate || `${yr}-07-22`;
+    } else {
+      // Brand new year! Initialize empty events, classes, timetable
+      const yrStr = String(yr);
+      const newTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS)).map(term => ({
+        ...term,
+        startDate: term.startDate.replace(/^\d{4}/, yrStr),
+        endDate: term.endDate.replace(/^\d{4}/, yrStr)
+      }));
+
+      this.data.terms = newTerms;
+      this.data.events = [];
+      this.data.classes = [];
+      this.data.timetableSlots = {};
+      this.data.timetableSlotDetails = {};
+      this.data.lessonPlans = {};
+      this.data.timetableCycleWeeks = 2;
+      this.data.currentDate = `${yr}-07-22`;
+
+      this.syncCurrentYearToYears();
     }
 
     this.saveState();

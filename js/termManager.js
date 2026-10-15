@@ -112,11 +112,17 @@ export const TermManager = {
 
   /**
    * Find blockout event for a specific date if any exists
+   * Supports both single-day events and multi-day range blockouts (blocking all periods).
    */
   getBlockoutForDate(dateStr, classId = null, periodId = null) {
     return state.events.find(ev => {
-      if (ev.date !== dateStr) return false;
+      const sDate = ev.startDate || ev.date;
+      const eDate = ev.endDate || ev.date || sDate;
+      if (!sDate) return false;
+      if (dateStr < sDate || dateStr > eDate) return false;
       if (ev.affectedClassId && ev.affectedClassId !== classId) return false;
+      // Multi-day blockouts automatically block all periods across those days
+      if (eDate > sDate) return true;
       if (ev.blockAllDay) return true;
       if (periodId && ev.blockedPeriod === periodId) return true;
       return false;

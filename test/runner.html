@@ -292,6 +292,81 @@
       return 'PersistentStorageManager verified with IndexedDB mirroring and HTML5 storage persistence.';
     });
 
+    // 11. Multi-Day Blockout Events Spanning Multiple Days
+    test('Multi-Day Blockout Events Span & Period Blocking', () => {
+      const originalEvents = JSON.parse(JSON.stringify(state.events));
+      state.data.events.push({
+        id: 'test_camp_event',
+        title: 'Year 8 Camp',
+        startDate: '2026-03-02',
+        endDate: '2026-03-06',
+        blockAllDay: true
+      });
+
+      const beforeSpan = TermManager.getBlockoutForDate('2026-03-01');
+      if (beforeSpan) throw new Error('2026-03-01 before camp was blocked');
+
+      for (let day = 2; day <= 6; day++) {
+        const dStr = `2026-03-0${day}`;
+        const bP1 = TermManager.getBlockoutForDate(dStr, null, 'p1');
+        const bP5 = TermManager.getBlockoutForDate(dStr, null, 'p5');
+        if (!bP1 || !bP5 || bP1.title !== 'Year 8 Camp') {
+          throw new Error(`Day ${dStr} was not blocked for all periods`);
+        }
+      }
+
+      const afterSpan = TermManager.getBlockoutForDate('2026-03-07');
+      if (afterSpan) throw new Error('2026-03-07 after camp was blocked');
+
+      state.data.events = originalEvents;
+      state.saveState();
+      return 'Multi-day blockout correctly spans March 2–6 and blocks all periods.';
+    });
+
+    // 12. Academic Year Switching and Scoping
+    test('Academic Year Content Scoping and Restoration', () => {
+      const origYear = state.academicYear;
+      const initialClassCount = state.classes.length;
+      const initialEventCount = state.events.length;
+
+      // Move to 2027
+      state.setAcademicYear(2027);
+      if (state.academicYear !== 2027) throw new Error('Failed to set academicYear to 2027');
+      if (state.classes.length !== 0) throw new Error('Classes did not disappear in 2027');
+      if (state.events.length !== 0) throw new Error('Events did not disappear in 2027');
+      if (Object.keys(state.timetableSlots).length !== 0) throw new Error('Timetable did not clear in 2027');
+
+      // Add a class and event in 2027
+      state.findOrCreateClassByName('2027 Physics', 'Lab 1', '#8b5cf6');
+      state.data.events.push({
+        id: 'ev_2027_trip',
+        title: '2027 Science Excursion',
+        startDate: '2027-05-10',
+        endDate: '2027-05-12',
+        blockAllDay: true
+      });
+      state.saveState();
+
+      // Return to original year (2026)
+      state.setAcademicYear(origYear);
+      if (state.classes.length !== initialClassCount) throw new Error('2026 classes not restored');
+      if (state.events.length !== initialEventCount) throw new Error('2026 events not restored');
+      if (state.classes.some(c => c.name === '2027 Physics')) throw new Error('2027 class leaked into 2026');
+
+      // Return to 2027
+      state.setAcademicYear(2027);
+      if (state.classes.length !== 1 || state.classes[0].name !== '2027 Physics') {
+        throw new Error('2027 class was not preserved when navigating back');
+      }
+      if (state.events.length !== 1 || state.events[0].title !== '2027 Science Excursion') {
+        throw new Error('2027 event was not preserved when navigating back');
+      }
+
+      // Cleanup back to original year
+      state.setAcademicYear(origYear);
+      return 'Academic year switching cleanly isolates classes, timetable, and blockouts per year.';
+    });
+
     const elapsed = Math.round(performance.now() - startTime);
 
     // Update UI

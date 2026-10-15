@@ -260,14 +260,46 @@
           const parsed = JSON.parse(stored);
           if (parsed && typeof parsed === 'object') {
             const def = this.getDefaultState();
+            const year = parsed.academicYear ? parseInt(parsed.academicYear, 10) : (
+              (parsed.terms && parsed.terms.length > 0 && parsed.terms[0].startDate)
+                ? parseInt(parsed.terms[0].startDate.substring(0, 4), 10) || 2026
+                : 2026
+            );
+
+            const years = (parsed.years && typeof parsed.years === 'object') ? parsed.years : {};
+
+            if (!years[year]) {
+              years[year] = {
+                terms: (Array.isArray(parsed.terms) && parsed.terms.length > 0) ? parsed.terms : def.terms,
+                classes: Array.isArray(parsed.classes) ? parsed.classes : def.classes,
+                events: Array.isArray(parsed.events) ? parsed.events : def.events,
+                timetableSlots: parsed.timetableSlots || def.timetableSlots,
+                timetableSlotDetails: parsed.timetableSlotDetails || {},
+                lessonPlans: parsed.lessonPlans || def.lessonPlans,
+                timetableCycleWeeks: parsed.timetableCycleWeeks || 2,
+                currentDate: parsed.currentDate || `${year}-07-22`
+              };
+            }
+
+            if (!years[2026] && def.years[2026]) {
+              years[2026] = JSON.parse(JSON.stringify(def.years[2026]));
+            }
+
+            const curYrData = years[year];
+
             return {
               ...def,
               ...parsed,
-              terms: (Array.isArray(parsed.terms) && parsed.terms.length > 0) ? parsed.terms : def.terms,
-              classes: (Array.isArray(parsed.classes) && parsed.classes.length > 0) ? parsed.classes : def.classes,
-              periods: (Array.isArray(parsed.periods) && parsed.periods.length > 0) ? parsed.periods : def.periods,
-              timetableSlots: (parsed.timetableSlots && Object.keys(parsed.timetableSlots).length > 0) ? parsed.timetableSlots : def.timetableSlots,
-              lessonPlans: (parsed.lessonPlans && Object.keys(parsed.lessonPlans).length > 0) ? parsed.lessonPlans : def.lessonPlans,
+              academicYear: year,
+              currentDate: curYrData.currentDate || parsed.currentDate || `${year}-07-22`,
+              terms: curYrData.terms || def.terms,
+              classes: curYrData.classes || [],
+              events: curYrData.events || [],
+              timetableSlots: curYrData.timetableSlots || {},
+              timetableSlotDetails: curYrData.timetableSlotDetails || {},
+              lessonPlans: curYrData.lessonPlans || {},
+              timetableCycleWeeks: curYrData.timetableCycleWeeks || parsed.timetableCycleWeeks || 2,
+              years: years
             };
           }
         }
@@ -278,17 +310,39 @@
     }
 
     getDefaultState() {
+      const defaultYear = 2026;
+      const defaultTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS));
+      const defaultPeriods = JSON.parse(JSON.stringify(DEFAULT_PERIODS));
+      const defaultClasses = JSON.parse(JSON.stringify(DEFAULT_CLASSES));
+      const defaultEvents = JSON.parse(JSON.stringify(DEFAULT_EVENTS));
+      const defaultTimetableSlots = JSON.parse(JSON.stringify(DEFAULT_TIMETABLE_SLOTS));
+      const defaultLessonPlans = JSON.parse(JSON.stringify(DEFAULT_LESSON_PLANS));
+
       return {
         tutorialCompleted: false,
         timeFormat: '12h',
         currentDate: '2026-07-22',
+        academicYear: defaultYear,
         timetableCycleWeeks: 2,
-        terms: JSON.parse(JSON.stringify(DEFAULT_TERMS)),
-        periods: JSON.parse(JSON.stringify(DEFAULT_PERIODS)),
-        classes: JSON.parse(JSON.stringify(DEFAULT_CLASSES)),
-        events: JSON.parse(JSON.stringify(DEFAULT_EVENTS)),
-        timetableSlots: JSON.parse(JSON.stringify(DEFAULT_TIMETABLE_SLOTS)),
-        lessonPlans: JSON.parse(JSON.stringify(DEFAULT_LESSON_PLANS))
+        terms: defaultTerms,
+        periods: defaultPeriods,
+        classes: defaultClasses,
+        events: defaultEvents,
+        timetableSlots: defaultTimetableSlots,
+        timetableSlotDetails: {},
+        lessonPlans: defaultLessonPlans,
+        years: {
+          2026: {
+            terms: JSON.parse(JSON.stringify(defaultTerms)),
+            events: JSON.parse(JSON.stringify(defaultEvents)),
+            classes: JSON.parse(JSON.stringify(defaultClasses)),
+            timetableSlots: JSON.parse(JSON.stringify(defaultTimetableSlots)),
+            timetableSlotDetails: {},
+            lessonPlans: JSON.parse(JSON.stringify(defaultLessonPlans)),
+            timetableCycleWeeks: 2,
+            currentDate: '2026-07-22'
+          }
+        }
       };
     }
 
@@ -367,7 +421,23 @@
       }
     }
 
+    syncCurrentYearToYears() {
+      const yr = this.academicYear;
+      if (!this.data.years) this.data.years = {};
+      this.data.years[yr] = {
+        terms: JSON.parse(JSON.stringify(this.data.terms || [])),
+        events: JSON.parse(JSON.stringify(this.data.events || [])),
+        classes: JSON.parse(JSON.stringify(this.data.classes || [])),
+        timetableSlots: JSON.parse(JSON.stringify(this.data.timetableSlots || {})),
+        timetableSlotDetails: JSON.parse(JSON.stringify(this.data.timetableSlotDetails || {})),
+        lessonPlans: JSON.parse(JSON.stringify(this.data.lessonPlans || {})),
+        timetableCycleWeeks: this.data.timetableCycleWeeks || 2,
+        currentDate: this.data.currentDate || `${yr}-07-22`
+      };
+    }
+
     saveState() {
+      this.syncCurrentYearToYears();
       this.indicateSaveStatus('saving');
 
       // 1. Synchronous localStorage write
@@ -406,6 +476,7 @@
       this.data.events = [];
       this.data.classes = [];
       this.data.timetableSlots = {};
+      this.data.timetableSlotDetails = {};
       this.data.lessonPlans = {};
       this.data.tutorialCompleted = true;
       this.saveState();
@@ -461,22 +532,46 @@
     }
 
     setAcademicYear(newYear) {
-      const yrStr = String(newYear);
-      this.data.academicYear = parseInt(newYear, 10);
+      const yr = parseInt(newYear, 10);
+      if (isNaN(yr) || yr < 2020 || yr > 2035) return;
+      if (yr === this.data.academicYear && this.data.years && this.data.years[yr]) return;
 
-      if (this.data.terms) {
-        this.data.terms.forEach(term => {
-          if (term.startDate) {
-            term.startDate = term.startDate.replace(/^\d{4}/, yrStr);
-          }
-          if (term.endDate) {
-            term.endDate = term.endDate.replace(/^\d{4}/, yrStr);
-          }
-        });
-      }
+      // First sync current year's state into years[oldYear]
+      this.syncCurrentYearToYears();
 
-      if (this.data.currentDate) {
-        this.data.currentDate = this.data.currentDate.replace(/^\d{4}/, yrStr);
+      this.data.academicYear = yr;
+      if (!this.data.years) this.data.years = {};
+
+      if (this.data.years[yr]) {
+        // Existing year! Restore its scoped data
+        const yrData = this.data.years[yr];
+        this.data.terms = JSON.parse(JSON.stringify(yrData.terms || []));
+        this.data.events = JSON.parse(JSON.stringify(yrData.events || []));
+        this.data.classes = JSON.parse(JSON.stringify(yrData.classes || []));
+        this.data.timetableSlots = JSON.parse(JSON.stringify(yrData.timetableSlots || {}));
+        this.data.timetableSlotDetails = JSON.parse(JSON.stringify(yrData.timetableSlotDetails || {}));
+        this.data.lessonPlans = JSON.parse(JSON.stringify(yrData.lessonPlans || {}));
+        this.data.timetableCycleWeeks = yrData.timetableCycleWeeks || 2;
+        this.data.currentDate = yrData.currentDate || `${yr}-07-22`;
+      } else {
+        // Brand new year! Initialize empty events, classes, timetable
+        const yrStr = String(yr);
+        const newTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS)).map(term => ({
+          ...term,
+          startDate: term.startDate.replace(/^\d{4}/, yrStr),
+          endDate: term.endDate.replace(/^\d{4}/, yrStr)
+        }));
+
+        this.data.terms = newTerms;
+        this.data.events = [];
+        this.data.classes = [];
+        this.data.timetableSlots = {};
+        this.data.timetableSlotDetails = {};
+        this.data.lessonPlans = {};
+        this.data.timetableCycleWeeks = 2;
+        this.data.currentDate = `${yr}-07-22`;
+
+        this.syncCurrentYearToYears();
       }
 
       this.saveState();
@@ -760,8 +855,13 @@
 
     getBlockoutForDate(dateStr, classId = null, periodId = null) {
       return state.events.find(ev => {
-        if (ev.date !== dateStr) return false;
+        const sDate = ev.startDate || ev.date;
+        const eDate = ev.endDate || ev.date || sDate;
+        if (!sDate) return false;
+        if (dateStr < sDate || dateStr > eDate) return false;
         if (ev.affectedClassId && ev.affectedClassId !== classId) return false;
+        // Multi-day blockout events automatically block all periods across those days
+        if (eDate > sDate) return true;
         if (ev.blockAllDay) return true;
         if (periodId && ev.blockedPeriod === periodId) return true;
         return false;
@@ -1337,7 +1437,7 @@
               <span style="font-size:1.3rem;">🎓</span>
               <div>
                 <div style="font-weight:700; font-size:0.9rem; color:var(--text-main);">Academic School Year</div>
-                <div style="font-size:0.78rem; color:var(--text-muted);">Changing the school year shifts all term dates automatically.</div>
+                <div style="font-size:0.78rem; color:var(--text-muted);">Switching years displays that year's terms, timetable, classes, and blockout events.</div>
               </div>
             </div>
             <div style="display:flex; align-items:center; gap:0.5rem;">
@@ -1375,14 +1475,28 @@
       if (!container) return;
 
       if (state.events.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding: 2rem; color: var(--text-dim);">No calendar events or blockouts added yet.</div>`;
+        container.innerHTML = `<div style="text-align:center; padding: 2rem; color: var(--text-dim);">No calendar events or blockouts added for ${state.academicYear} yet.</div>`;
         return;
       }
 
       container.innerHTML = state.events.map(ev => {
         const classObj = ev.affectedClassId ? state.classes.find(c => c.id === ev.affectedClassId) : null;
         const classBadge = classObj ? `<span class="tag" style="background:${classObj.color}22; color:${classObj.color}">${classObj.name}</span>` : `<span class="tag tag-locked">All Classes</span>`;
-        const periodBadge = ev.blockAllDay ? `Whole Day` : `Blocked Period: ${ev.blockedPeriod}`;
+        
+        const sDate = ev.startDate || ev.date;
+        const eDate = ev.endDate || ev.date || sDate;
+        const isMultiDay = eDate && eDate > sDate;
+
+        let periodBadge = '';
+        let dateText = '';
+
+        if (isMultiDay) {
+          periodBadge = `<span style="color:var(--warning); font-weight:700;">Multi-Day (All Periods Blocked)</span>`;
+          dateText = `${TermManager.formatDisplayDate(sDate)} → ${TermManager.formatDisplayDate(eDate)}`;
+        } else {
+          periodBadge = ev.blockAllDay ? `Whole Day` : `Blocked Period: ${ev.blockedPeriod}`;
+          dateText = TermManager.formatDisplayDate(sDate);
+        }
 
         return `
           <div class="event-item" data-id="${ev.id}">
@@ -1390,9 +1504,10 @@
               <div class="event-title">
                 <span>${ev.title}</span>
                 <span class="event-type-badge type-${ev.type}">${ev.type}</span>
+                ${isMultiDay ? `<span class="tag" style="background:rgba(245,158,11,0.15); color:var(--warning, #f59e0b); font-weight:700; font-size:0.75rem;">📅 Multi-Day</span>` : ''}
               </div>
               <div class="event-date">
-                📅 ${TermManager.formatDisplayDate(ev.date)} • ${periodBadge} • ${classBadge}
+                📅 ${dateText} • ${periodBadge} • ${classBadge}
               </div>
             </div>
             <button class="btn btn-danger btn-sm delete-event-btn" data-id="${ev.id}">Delete</button>
@@ -1405,9 +1520,21 @@
       const handleYearChange = (newYear) => {
         const yr = parseInt(newYear, 10);
         if (!isNaN(yr) && yr >= 2020 && yr <= 2035) {
+          if (yr === state.academicYear) return;
           state.setAcademicYear(yr);
           updateCurrentDateDisplay();
-          refreshAllViews(false, true);
+          if (typeof LessonUI !== 'undefined') {
+            LessonUI.selectedClassId = state.classes[0]?.id || null;
+          }
+          if (typeof HomeworkUI !== 'undefined') {
+            HomeworkUI.selectedClassId = state.classes[0]?.id || null;
+            HomeworkUI.ensureDefaultTermAndWeek();
+          }
+          if (typeof MasterScheduleUI !== 'undefined') {
+            MasterScheduleUI.selectedClassIds = ['ALL'];
+          }
+          showToastNotification(`Switched to academic year ${yr}`);
+          refreshAllViews(true, true);
         }
       };
 
@@ -1424,6 +1551,14 @@
             state.saveState();
             refreshAllViews(false, true);
           }
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.target.id === 'input-academic-year' && e.key === 'Enter') {
+          e.preventDefault();
+          handleYearChange(e.target.value);
+          e.target.blur();
         }
       });
 
@@ -1449,6 +1584,56 @@
           this.openAddEventModal();
         });
       }
+
+      // Add interactive listener to Start Date & End Date in Event Modal
+      const eventDateInput = document.getElementById('event-date');
+      const eventEndDateInput = document.getElementById('event-end-date');
+      const blockAllDayCheckbox = document.getElementById('event-block-allday');
+      const periodGroup = document.getElementById('event-period-group');
+      const multidayNotice = document.getElementById('event-multiday-notice');
+
+      const updateEventModalDateState = () => {
+        if (!eventDateInput) return;
+        const startDate = eventDateInput.value;
+        if (eventEndDateInput) {
+          eventEndDateInput.min = startDate || '';
+          if (eventEndDateInput.value && startDate && eventEndDateInput.value < startDate) {
+            eventEndDateInput.value = startDate;
+          }
+          const isMultiDay = !!(eventEndDateInput.value && startDate && eventEndDateInput.value > startDate);
+          if (isMultiDay) {
+            if (blockAllDayCheckbox) {
+              blockAllDayCheckbox.checked = true;
+              blockAllDayCheckbox.disabled = true;
+            }
+            if (multidayNotice) multidayNotice.style.display = 'block';
+            if (periodGroup) periodGroup.style.display = 'none';
+          } else {
+            if (blockAllDayCheckbox) {
+              blockAllDayCheckbox.disabled = false;
+            }
+            if (multidayNotice) multidayNotice.style.display = 'none';
+            if (periodGroup) {
+              periodGroup.style.display = (blockAllDayCheckbox && blockAllDayCheckbox.checked) ? 'none' : 'block';
+            }
+          }
+        }
+      };
+
+      if (eventDateInput) {
+        eventDateInput.addEventListener('change', updateEventModalDateState);
+      }
+      if (eventEndDateInput) {
+        eventEndDateInput.addEventListener('change', updateEventModalDateState);
+        eventEndDateInput.addEventListener('input', updateEventModalDateState);
+      }
+      if (blockAllDayCheckbox) {
+        blockAllDayCheckbox.addEventListener('change', () => {
+          if (periodGroup && !blockAllDayCheckbox.disabled) {
+            periodGroup.style.display = blockAllDayCheckbox.checked ? 'none' : 'block';
+          }
+        });
+      }
     },
 
     openAddEventModal() {
@@ -1459,6 +1644,37 @@
         classSelect.innerHTML = `<option value="">All Classes (Whole School)</option>` +
           state.classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
       }
+
+      // Populate period selector dropdown inside modal
+      const periodSelect = document.getElementById('event-period-select');
+      if (periodSelect && state.periods) {
+        periodSelect.innerHTML = state.periods.filter(p => !p.isBreak).map(p =>
+          `<option value="${p.id}">${p.name}</option>`
+        ).join('');
+      }
+
+      const eventDateInput = document.getElementById('event-date');
+      const eventEndDateInput = document.getElementById('event-end-date');
+      const blockAllDayCheckbox = document.getElementById('event-block-allday');
+      const multidayNotice = document.getElementById('event-multiday-notice');
+      const periodGroup = document.getElementById('event-period-group');
+
+      if (eventDateInput) {
+        const yr = state.academicYear;
+        const defDate = (state.terms && state.terms[0] && state.terms[0].startDate) ? state.terms[0].startDate : `${yr}-02-01`;
+        eventDateInput.value = defDate;
+        if (eventEndDateInput) {
+          eventEndDateInput.value = '';
+          eventEndDateInput.min = defDate;
+        }
+      }
+      if (blockAllDayCheckbox) {
+        blockAllDayCheckbox.checked = true;
+        blockAllDayCheckbox.disabled = false;
+      }
+      if (multidayNotice) multidayNotice.style.display = 'none';
+      if (periodGroup) periodGroup.style.display = 'none';
+
       modalBackdrop.classList.add('active');
     }
   };
@@ -3254,7 +3470,17 @@
 
             let slotsHtml = '';
             if (daySlots.length === 0) {
-              slotsHtml = `<div style="font-size:0.78rem; color:var(--text-dim); font-style:italic; padding:0.5rem 0;">No classes scheduled</div>`;
+              const dayBlockout = TermManager.getBlockoutForDate(dateStr);
+              if (dayBlockout) {
+                slotsHtml = `
+                  <div class="master-slot-item blockout">
+                    <strong>🚫 ${dayBlockout.title}</strong>
+                    <div style="font-size:0.72rem;">Whole Day Blocked Out</div>
+                  </div>
+                `;
+              } else {
+                slotsHtml = `<div style="font-size:0.78rem; color:var(--text-dim); font-style:italic; padding:0.5rem 0;">No classes scheduled</div>`;
+              }
             } else {
               daySlots.forEach(s => {
                 const classObj = s.assignedClass;
@@ -5540,28 +5766,34 @@
     if (eventForm) {
       eventForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const title = document.getElementById('event-title').value;
-        const date = document.getElementById('event-date').value;
+        const title = document.getElementById('event-title').value.trim();
+        const startDate = document.getElementById('event-date').value;
+        const endDateVal = document.getElementById('event-end-date')?.value;
+        const endDate = (endDateVal && endDateVal >= startDate) ? endDateVal : startDate;
+        const isMultiDay = endDate > startDate;
         const type = document.getElementById('event-type').value;
-        const blockAllDay = document.getElementById('event-block-allday').checked;
-        const blockedPeriod = document.getElementById('event-period-select').value;
+        const blockAllDay = isMultiDay ? true : document.getElementById('event-block-allday').checked;
+        const blockedPeriod = (isMultiDay || blockAllDay) ? null : document.getElementById('event-period-select').value;
         const affectedClassId = document.getElementById('event-class-select').value || null;
 
         const newEvent = {
-          id: `e_${Date.now()}`,
+          id: `e_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
           title: title,
-          date: date,
+          date: startDate,
+          startDate: startDate,
+          endDate: endDate,
           type: type,
           blockAllDay: blockAllDay,
-          blockedPeriod: blockAllDay ? null : blockedPeriod,
+          blockedPeriod: blockedPeriod,
           affectedClassId: affectedClassId
         };
 
         state.data.events.push(newEvent);
         state.saveState();
-        document.getElementById('modal-event-backdrop').classList.remove('active');
+        document.getElementById('modal-event-backdrop')?.classList.remove('active');
         eventForm.reset();
         refreshAllViews(false, true);
+        showToastNotification(`Added blockout event "${title}"`);
       });
     }
 

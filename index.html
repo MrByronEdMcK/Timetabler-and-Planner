@@ -334,35 +334,23 @@
         </div>
         <div class="grid-2">
           <div class="form-group">
-            <label class="form-label">Date</label>
+            <label class="form-label">Start Date</label>
             <input type="date" id="event-date" class="form-control" required>
           </div>
+          <div class="form-group">
+            <label class="form-label">End Date <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(For multi-day events)</span></label>
+            <input type="date" id="event-end-date" class="form-control" placeholder="Optional (same day if blank)">
+          </div>
+        </div>
+        <div class="grid-2">
           <div class="form-group">
             <label class="form-label">Event Type</label>
             <select id="event-type" class="form-control">
               <option value="carnival">Sports Carnival</option>
               <option value="assembly">School Assembly</option>
               <option value="holiday">Public Holiday</option>
-              <option value="excursion">Excursion</option>
+              <option value="excursion">Excursion / Camp</option>
               <option value="other">Other</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Scope</label>
-          <div style="display:flex; gap:1rem; align-items:center;">
-            <label><input type="checkbox" id="event-block-allday" checked> Block Entire School Day</label>
-          </div>
-        </div>
-        <div class="grid-2">
-          <div class="form-group">
-            <label class="form-label">Specific Blocked Period (if not whole day)</label>
-            <select id="event-period-select" class="form-control">
-              <option value="p1">Period 1</option>
-              <option value="p2">Period 2</option>
-              <option value="p3">Period 3</option>
-              <option value="p4">Period 4</option>
-              <option value="p5">Period 5</option>
             </select>
           </div>
           <div class="form-group">
@@ -371,6 +359,28 @@
               <!-- Rendered dynamically -->
             </select>
           </div>
+        </div>
+        <div class="form-group" id="event-scope-group">
+          <label class="form-label">Scope</label>
+          <div style="display:flex; flex-direction:column; gap:0.4rem;">
+            <label id="event-block-allday-label" style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+              <input type="checkbox" id="event-block-allday" checked>
+              <span>Block Entire School Day(s)</span>
+            </label>
+            <div id="event-multiday-notice" style="display:none; font-size:0.8rem; color:var(--primary); font-weight:600; background:var(--bg-subtle); padding:0.45rem 0.75rem; border-radius:var(--radius-sm); border:1px solid var(--border-color);">
+              ℹ️ Multi-day events automatically span all days in the date range and block out all periods.
+            </div>
+          </div>
+        </div>
+        <div class="form-group" id="event-period-group">
+          <label class="form-label">Specific Blocked Period (if single day & not whole day)</label>
+          <select id="event-period-select" class="form-control">
+            <option value="p1">Period 1</option>
+            <option value="p2">Period 2</option>
+            <option value="p3">Period 3</option>
+            <option value="p4">Period 4</option>
+            <option value="p5">Period 5</option>
+          </select>
         </div>
         <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
           <button type="button" class="btn btn-secondary modal-close">Cancel</button>

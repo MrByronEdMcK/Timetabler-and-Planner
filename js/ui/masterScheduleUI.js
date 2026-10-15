@@ -437,7 +437,17 @@ export const MasterScheduleUI = {
 
         let slotsHtml = '';
         if (daySlots.length === 0) {
-          slotsHtml = `<div style="font-size:0.78rem; color:var(--text-dim); font-style:italic; padding:0.5rem 0;">No classes scheduled</div>`;
+          const dayBlockout = TermManager.getBlockoutForDate(dateStr);
+          if (dayBlockout) {
+            slotsHtml = `
+              <div class="master-slot-item blockout">
+                <strong>🚫 ${dayBlockout.title}</strong>
+                <div style="font-size:0.72rem;">Whole Day Blocked Out</div>
+              </div>
+            `;
+          } else {
+            slotsHtml = `<div style="font-size:0.78rem; color:var(--text-dim); font-style:italic; padding:0.5rem 0;">No classes scheduled</div>`;
+          }
         } else {
           daySlots.forEach(s => {
             const classObj = s.assignedClass;

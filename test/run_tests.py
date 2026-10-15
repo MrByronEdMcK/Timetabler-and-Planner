@@ -231,6 +231,127 @@ def run():
     runner.assert_true('<title>Timetable and Planner</title>' in index_html, 'index.html document title is Timetable and Planner')
     runner.assert_true('Timetable_Planner_Backup_' in app_js, 'app.js backup downloads use clean Timetable_Planner_Backup prefix')
 
+    # Test 9: Multi-Day Blockout Events Engine & Period Blocking
+    print('\nTest 9: Multi-Day Blockout Events Engine & Period Blocking')
+    runner.assert_true('event-end-date' in index_html, 'index.html includes event-end-date input for multi-day blockouts')
+    runner.assert_true('syncCurrentYearToYears' in app_js, 'app.js implements syncCurrentYearToYears')
+    runner.assert_true('syncCurrentYearToYears' in state_js, 'state.js implements syncCurrentYearToYears')
+
+    def get_blockout_for_date(events, date_str, class_id=None, period_id=None):
+        for ev in events:
+            s_date = ev.get('startDate') or ev.get('date')
+            e_date = ev.get('endDate') or ev.get('date') or s_date
+            if not s_date:
+                continue
+            if date_str < s_date or date_str > e_date:
+                continue
+            if ev.get('affectedClassId') and ev.get('affectedClassId') != class_id:
+                continue
+            if e_date > s_date:
+                return ev
+            if ev.get('blockAllDay'):
+                return ev
+            if period_id and ev.get('blockedPeriod') == period_id:
+                return ev
+        return None
+
+    sample_events = [
+        {'id': 'e1', 'title': 'Year 7 Camp', 'startDate': '2026-03-02', 'endDate': '2026-03-06', 'blockAllDay': True},
+        {'id': 'e2', 'title': 'Period 1 Assembly', 'startDate': '2026-05-15', 'endDate': '2026-05-15', 'blockAllDay': False, 'blockedPeriod': 'p1'}
+    ]
+
+    # Pre-span date
+    runner.assert_true(get_blockout_for_date(sample_events, '2026-03-01', period_id='p1') is None, 'Date before multi-day camp (2026-03-01) is NOT blocked')
+    # All days in span blocked for all periods
+    for d in ['2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05', '2026-03-06']:
+        b1 = get_blockout_for_date(sample_events, d, period_id='p1')
+        b5 = get_blockout_for_date(sample_events, d, period_id='p5')
+        runner.assert_true(b1 is not None and b5 is not None and b1['title'] == 'Year 7 Camp', f'Multi-day event spans {d} and blocks all periods (P1 & P5)')
+    # Post-span date
+    runner.assert_true(get_blockout_for_date(sample_events, '2026-03-07', period_id='p1') is None, 'Date after multi-day camp (2026-03-07) is NOT blocked')
+
+    # Single-day blocked period
+    runner.assert_true(get_blockout_for_date(sample_events, '2026-05-15', period_id='p1') is not None, 'Single-day event blocks targeted period P1')
+    runner.assert_true(get_blockout_for_date(sample_events, '2026-05-15', period_id='p2') is None, 'Single-day event leaves non-targeted period P2 open')
+
+    # Test 10: Academic Year Scoping, Cleared State for New Years, and Restoration
+    print('\nTest 10: Academic Year Scoping & Restoration')
+    class MockStateStore:
+        def __init__(self):
+            self.data = {
+                'academicYear': 2026,
+                'terms': [{'id': 't1', 'startDate': '2026-01-28', 'endDate': '2026-04-02'}],
+                'classes': [{'id': 'c1', 'name': 'Year 9 Maths'}],
+                'events': [{'id': 'e1', 'title': 'Athletics Carnival', 'date': '2026-08-07'}],
+                'timetableSlots': {'1_1_p1': 'c1'},
+                'years': {
+                    2026: {
+                        'terms': [{'id': 't1', 'startDate': '2026-01-28', 'endDate': '2026-04-02'}],
+                        'classes': [{'id': 'c1', 'name': 'Year 9 Maths'}],
+                        'events': [{'id': 'e1', 'title': 'Athletics Carnival', 'date': '2026-08-07'}],
+                        'timetableSlots': {'1_1_p1': 'c1'}
+                    }
+                }
+            }
+
+        def sync_current_year(self):
+            yr = self.data['academicYear']
+            self.data['years'][yr] = {
+                'terms': json.loads(json.dumps(self.data.get('terms', []))),
+                'classes': json.loads(json.dumps(self.data.get('classes', []))),
+                'events': json.loads(json.dumps(self.data.get('events', []))),
+                'timetableSlots': json.loads(json.dumps(self.data.get('timetableSlots', {})))
+            }
+
+        def set_academic_year(self, new_year):
+            self.sync_current_year()
+            self.data['academicYear'] = new_year
+            if new_year in self.data['years']:
+                yr_data = self.data['years'][new_year]
+                self.data['terms'] = json.loads(json.dumps(yr_data.get('terms', [])))
+                self.data['classes'] = json.loads(json.dumps(yr_data.get('classes', [])))
+                self.data['events'] = json.loads(json.dumps(yr_data.get('events', [])))
+                self.data['timetableSlots'] = json.loads(json.dumps(yr_data.get('timetableSlots', {})))
+            else:
+                self.data['terms'] = [{'id': 't1', 'startDate': f'{new_year}-01-28', 'endDate': f'{new_year}-04-02'}]
+                self.data['classes'] = []
+                self.data['events'] = []
+                self.data['timetableSlots'] = {}
+                self.sync_current_year()
+
+    store = MockStateStore()
+    runner.assert_equal(len(store.data['classes']), 1, 'Initial 2026 year has 1 class')
+    runner.assert_equal(len(store.data['events']), 1, 'Initial 2026 year has 1 event')
+
+    # Switch to 2027
+    store.set_academic_year(2027)
+    runner.assert_equal(store.data['academicYear'], 2027, 'Current academic year switched to 2027')
+    runner.assert_equal(len(store.data['classes']), 0, 'New year 2027 classes list is empty (disappeared)')
+    runner.assert_equal(len(store.data['events']), 0, 'New year 2027 events list is empty (disappeared)')
+    runner.assert_equal(len(store.data['timetableSlots']), 0, 'New year 2027 timetable slots are empty (disappeared)')
+
+    # Add 2027 content
+    store.data['classes'].append({'id': 'c_2027', 'name': 'Year 10 Science'})
+    store.data['events'].append({'id': 'e_2027', 'title': '2027 Ski Trip', 'startDate': '2027-07-12', 'endDate': '2027-07-16'})
+    store.data['timetableSlots']['1_2_p3'] = 'c_2027'
+
+    # Switch back to 2026
+    store.set_academic_year(2026)
+    runner.assert_equal(store.data['academicYear'], 2026, 'Switched back to 2026')
+    runner.assert_equal(len(store.data['classes']), 1, '2026 classes successfully restored')
+    runner.assert_equal(store.data['classes'][0]['name'], 'Year 9 Maths', 'Original 2026 class restored')
+    runner.assert_equal(len(store.data['events']), 1, '2026 events successfully restored')
+    runner.assert_equal(store.data['events'][0]['title'], 'Athletics Carnival', 'Original 2026 event restored')
+    runner.assert_true('1_1_p1' in store.data['timetableSlots'], '2026 timetable slot restored')
+
+    # Switch to 2027 again
+    store.set_academic_year(2027)
+    runner.assert_equal(len(store.data['classes']), 1, '2027 custom class preserved upon returning to 2027')
+    runner.assert_equal(store.data['classes'][0]['name'], 'Year 10 Science', '2027 class restored')
+    runner.assert_equal(len(store.data['events']), 1, '2027 multi-day event preserved upon returning to 2027')
+    runner.assert_equal(store.data['events'][0]['title'], '2027 Ski Trip', '2027 multi-day event restored')
+    runner.assert_true('1_2_p3' in store.data['timetableSlots'], '2027 timetable slot preserved')
+
     print('\n==================================================')
     print(f'Test Results: {runner.passes} PASSED, {runner.fails} FAILED')
     print('==================================================\n')
