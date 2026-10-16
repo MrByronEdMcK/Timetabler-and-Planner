@@ -140,10 +140,10 @@ export const CalendarUI = {
 
     // Delete Event & Year Prev/Next Buttons
     document.addEventListener('click', (e) => {
-      if (e.target.id === 'btn-year-prev') {
+      if (e.target.id === 'btn-year-prev' || e.target.closest('#btn-year-prev')) {
         handleYearChange(state.academicYear - 1);
       }
-      if (e.target.id === 'btn-year-next') {
+      if (e.target.id === 'btn-year-next' || e.target.closest('#btn-year-next')) {
         handleYearChange(state.academicYear + 1);
       }
       if (e.target.classList.contains('delete-event-btn')) {

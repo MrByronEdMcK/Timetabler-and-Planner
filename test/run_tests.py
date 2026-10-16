@@ -7,6 +7,7 @@ import json
 import datetime
 import math
 import sys
+import os
 
 # Ensure UTF-8 output where supported or fallback gracefully
 if hasattr(sys.stdout, 'reconfigure'):
@@ -352,6 +353,33 @@ def run():
     runner.assert_equal(store.data['events'][0]['title'], '2027 Ski Trip', '2027 multi-day event restored')
     runner.assert_true('1_2_p3' in store.data['timetableSlots'], '2027 timetable slot preserved')
 
+    print('\nTest 11: Real Backup Import & Legacy JSON Isolation')
+    backup_file = r'c:\Users\charl\Downloads\Timetable_Planner_Backup_2026-10-15.json'
+    if os.path.exists(backup_file):
+        with open(backup_file, 'r', encoding='utf-8') as f:
+            raw_backup = json.load(f)
+        
+        # Verify raw backup itself contains no 2027 contamination
+        has_2027_events = any('2027' in (e.get('date', '') or e.get('startDate', '')) for e in raw_backup.get('events', []))
+        runner.assert_true(not has_2027_events, 'Raw backup JSON contains 0 events from 2027')
+        runner.assert_equal(len(raw_backup.get('classes', [])), 4, 'Raw backup JSON contains 4 classes')
+        runner.assert_equal(len(raw_backup.get('events', [])), 14, 'Raw backup JSON contains 14 blockout events')
+
+        # Test importState logic on the backup
+        clean_file = r'c:\Users\charl\Downloads\Timetable_Planner_Backup_Clean.json'
+        runner.assert_true(os.path.exists(clean_file), 'Clean backup file exists in Downloads folder')
+        with open(clean_file, 'r', encoding='utf-8') as f:
+            clean_data = json.load(f)
+        
+        runner.assert_true('years' in clean_data, 'Clean backup includes years map')
+        runner.assert_true('2026' in clean_data['years'], 'Clean backup contains 2026')
+        runner.assert_true('2027' in clean_data['years'], 'Clean backup contains 2027')
+        runner.assert_equal(len(clean_data['years']['2026']['classes']), 4, '2026 has all 4 classes')
+        runner.assert_equal(len(clean_data['years']['2026']['events']), 14, '2026 has all 14 blockouts')
+        runner.assert_equal(len(clean_data['years']['2027']['classes']), 0, '2027 has 0 classes (empty)')
+        runner.assert_equal(len(clean_data['years']['2027']['events']), 0, '2027 has 0 blockouts (empty)')
+        runner.assert_equal(len(clean_data['years']['2027']['timetableSlots']), 0, '2027 timetable is empty')
+
     print('\n==================================================')
     print(f'Test Results: {runner.passes} PASSED, {runner.fails} FAILED')
     print('==================================================\n')
@@ -360,3 +388,4 @@ def run():
 
 if __name__ == '__main__':
     run()
+

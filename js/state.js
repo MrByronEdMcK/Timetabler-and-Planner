@@ -252,29 +252,92 @@ export class StateStore {
           const parsed = JSON.parse(stored);
           if (parsed && typeof parsed === 'object') {
             const def = this.getDefaultState();
-            const year = parsed.academicYear ? parseInt(parsed.academicYear, 10) : (
-              (parsed.terms && parsed.terms.length > 0 && parsed.terms[0].startDate)
-                ? parseInt(parsed.terms[0].startDate.substring(0, 4), 10) || 2026
-                : 2026
-            );
+            let dataYear = 2026;
+            if (parsed.terms && parsed.terms.length > 0 && parsed.terms[0].startDate) {
+              const m = String(parsed.terms[0].startDate).match(/^(\d{4})/);
+              if (m) dataYear = parseInt(m[1], 10);
+            } else if (parsed.events && parsed.events.length > 0 && (parsed.events[0].startDate || parsed.events[0].date)) {
+              const m = String(parsed.events[0].startDate || parsed.events[0].date).match(/^(\d{4})/);
+              if (m) dataYear = parseInt(m[1], 10);
+            } else if (parsed.academicYear) {
+              dataYear = parseInt(parsed.academicYear, 10);
+            }
 
+            const year = parsed.academicYear ? parseInt(parsed.academicYear, 10) : dataYear;
             const years = (parsed.years && typeof parsed.years === 'object') ? parsed.years : {};
 
-            if (!years[year]) {
-              years[year] = {
+            if (!years[dataYear]) {
+              years[dataYear] = {
                 terms: (Array.isArray(parsed.terms) && parsed.terms.length > 0) ? parsed.terms : def.terms,
                 classes: Array.isArray(parsed.classes) ? parsed.classes : def.classes,
-                events: Array.isArray(parsed.events) ? parsed.events : def.events,
+                events: Array.isArray(parsed.events) ? parsed.events.filter(ev => {
+                  const d = ev.startDate || ev.date || '';
+                  return !d || d.startsWith(String(dataYear));
+                }) : def.events,
                 timetableSlots: parsed.timetableSlots || def.timetableSlots,
                 timetableSlotDetails: parsed.timetableSlotDetails || {},
                 lessonPlans: parsed.lessonPlans || def.lessonPlans,
                 timetableCycleWeeks: parsed.timetableCycleWeeks || 2,
-                currentDate: parsed.currentDate || `${year}-07-22`
+                currentDate: parsed.currentDate || `${dataYear}-07-22`
               };
             }
 
-            if (!years[2026] && def.years[2026]) {
-              years[2026] = JSON.parse(JSON.stringify(def.years[2026]));
+            // Sanitize all years: purge mismatched dates and clear legacy cloned classes
+            Object.keys(years).forEach(yKey => {
+              const yNum = parseInt(yKey, 10);
+              const yStr = String(yNum);
+              const yData = years[yKey];
+              if (yData && typeof yData === 'object') {
+                if (Array.isArray(yData.events)) {
+                  yData.events = yData.events.filter(ev => {
+                    const d = ev.startDate || ev.date || '';
+                    return !d || d.startsWith(yStr);
+                  });
+                }
+                let termsMismatch = false;
+                if (Array.isArray(yData.terms)) {
+                  yData.terms.forEach(t => {
+                    if (t.startDate && !t.startDate.startsWith(yStr)) {
+                      t.startDate = t.startDate.replace(/^\d{4}/, yStr);
+                      termsMismatch = true;
+                    }
+                    if (t.endDate && !t.endDate.startsWith(yStr)) {
+                      t.endDate = t.endDate.replace(/^\d{4}/, yStr);
+                      termsMismatch = true;
+                    }
+                  });
+                }
+                // If this year had mismatched terms and classes duplicate dataYear classes from legacy cloning, reset
+                if (yNum !== dataYear && termsMismatch && years[dataYear]) {
+                  const baseClasses = years[dataYear].classes || [];
+                  const baseIds = new Set(baseClasses.map(c => c.id));
+                  if (yData.classes && yData.classes.length > 0 && yData.classes.every(c => baseIds.has(c.id))) {
+                    yData.classes = [];
+                    yData.timetableSlots = {};
+                    yData.timetableSlotDetails = {};
+                    yData.lessonPlans = {};
+                  }
+                }
+              }
+            });
+
+            if (!years[year]) {
+              const yrStr = String(year);
+              const newTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS)).map(term => ({
+                ...term,
+                startDate: term.startDate.replace(/^\d{4}/, yrStr),
+                endDate: term.endDate.replace(/^\d{4}/, yrStr)
+              }));
+              years[year] = {
+                terms: newTerms,
+                classes: [],
+                events: [],
+                timetableSlots: {},
+                timetableSlotDetails: {},
+                lessonPlans: {},
+                timetableCycleWeeks: 2,
+                currentDate: `${year}-07-22`
+              };
             }
 
             const curYrData = years[year];
@@ -366,6 +429,108 @@ export class StateStore {
     PersistentStorageManager.saveToIndexedDB(this.data);
   }
 
+  importState(imported) {
+    if (!imported || typeof imported !== 'object') return false;
+    const def = this.getDefaultState();
+
+    let dataYear = 2026;
+    if (imported.terms && imported.terms.length > 0 && imported.terms[0].startDate) {
+      const m = String(imported.terms[0].startDate).match(/^(\d{4})/);
+      if (m) dataYear = parseInt(m[1], 10);
+    } else if (imported.events && imported.events.length > 0 && (imported.events[0].startDate || imported.events[0].date)) {
+      const m = String(imported.events[0].startDate || imported.events[0].date).match(/^(\d{4})/);
+      if (m) dataYear = parseInt(m[1], 10);
+    } else if (imported.academicYear) {
+      dataYear = parseInt(imported.academicYear, 10);
+    }
+
+    const years = (imported.years && typeof imported.years === 'object') ? JSON.parse(JSON.stringify(imported.years)) : {};
+
+    if (!years[dataYear]) {
+      years[dataYear] = {
+        terms: (Array.isArray(imported.terms) && imported.terms.length > 0) ? imported.terms : def.terms,
+        classes: Array.isArray(imported.classes) ? imported.classes : [],
+        events: Array.isArray(imported.events) ? imported.events.filter(e => {
+          const d = e.startDate || e.date || '';
+          return !d || d.startsWith(String(dataYear));
+        }) : [],
+        timetableSlots: imported.timetableSlots || {},
+        timetableSlotDetails: imported.timetableSlotDetails || {},
+        lessonPlans: imported.lessonPlans || {},
+        timetableCycleWeeks: imported.timetableCycleWeeks || 1,
+        currentDate: imported.currentDate || `${dataYear}-07-22`
+      };
+    }
+
+    // Sanitize any existing years
+    Object.keys(years).forEach(yKey => {
+      const yNum = parseInt(yKey, 10);
+      const yStr = String(yNum);
+      const yData = years[yKey];
+      if (yData && typeof yData === 'object') {
+        if (Array.isArray(yData.events)) {
+          yData.events = yData.events.filter(ev => {
+            const d = ev.startDate || ev.date || '';
+            return !d || d.startsWith(yStr);
+          });
+        }
+        let termsMismatch = false;
+        if (Array.isArray(yData.terms)) {
+          yData.terms.forEach(t => {
+            if (t.startDate && !t.startDate.startsWith(yStr)) {
+              t.startDate = t.startDate.replace(/^\d{4}/, yStr);
+              termsMismatch = true;
+            }
+            if (t.endDate && !t.endDate.startsWith(yStr)) {
+              t.endDate = t.endDate.replace(/^\d{4}/, yStr);
+              termsMismatch = true;
+            }
+          });
+        }
+        if (yNum !== dataYear && termsMismatch && years[dataYear]) {
+          const baseClasses = years[dataYear].classes || [];
+          const baseIds = new Set(baseClasses.map(c => c.id));
+          if (yData.classes && yData.classes.length > 0 && yData.classes.every(c => baseIds.has(c.id))) {
+            yData.classes = [];
+            yData.timetableSlots = {};
+            yData.timetableSlotDetails = {};
+            yData.lessonPlans = {};
+          }
+        }
+      }
+    });
+
+    if (!years[2027]) {
+      const yrStr = '2027';
+      const terms2027 = JSON.parse(JSON.stringify(years[dataYear]?.terms || DEFAULT_TERMS)).map(t => ({
+        ...t,
+        startDate: t.startDate ? t.startDate.replace(/^\d{4}/, yrStr) : `${yrStr}-01-28`,
+        endDate: t.endDate ? t.endDate.replace(/^\d{4}/, yrStr) : `${yrStr}-04-02`
+      }));
+      years[2027] = {
+        terms: terms2027,
+        classes: [],
+        events: [],
+        timetableSlots: {},
+        timetableSlotDetails: {},
+        lessonPlans: {},
+        timetableCycleWeeks: imported.timetableCycleWeeks || 1,
+        currentDate: '2027-01-28'
+      };
+    }
+
+    this.data = {
+      ...def,
+      ...imported,
+      academicYear: dataYear,
+      years: years
+    };
+
+    this.setAcademicYear(dataYear);
+    this.saveState();
+    return true;
+  }
+
   resetToDefault() {
     this.data = this.getDefaultState();
     this.saveState();
@@ -435,6 +600,43 @@ export class StateStore {
     if (this.data.years[yr]) {
       // Existing year! Restore its scoped data
       const yrData = this.data.years[yr];
+      const yrStr = String(yr);
+
+      // Sanitize events to only keep events belonging to this year
+      if (Array.isArray(yrData.events)) {
+        yrData.events = yrData.events.filter(ev => {
+          const d = ev.startDate || ev.date || '';
+          return !d || d.startsWith(yrStr);
+        });
+      }
+
+      // Sanitize terms to match this year's dates
+      let hadWrongYearTerms = false;
+      if (Array.isArray(yrData.terms)) {
+        yrData.terms.forEach(term => {
+          if (term.startDate && !term.startDate.startsWith(yrStr)) {
+            term.startDate = term.startDate.replace(/^\d{4}/, yrStr);
+            hadWrongYearTerms = true;
+          }
+          if (term.endDate && !term.endDate.startsWith(yrStr)) {
+            term.endDate = term.endDate.replace(/^\d{4}/, yrStr);
+            hadWrongYearTerms = true;
+          }
+        });
+      }
+
+      // If this year had wrong year terms and was an accidental legacy clone of 2026, purge it clean
+      if (hadWrongYearTerms && yr !== 2026 && this.data.years[2026]) {
+        const c2026 = this.data.years[2026].classes || [];
+        const c2026Ids = new Set(c2026.map(c => c.id));
+        if (yrData.classes && yrData.classes.length > 0 && yrData.classes.every(c => c2026Ids.has(c.id))) {
+          yrData.classes = [];
+          yrData.timetableSlots = {};
+          yrData.timetableSlotDetails = {};
+          yrData.lessonPlans = {};
+        }
+      }
+
       this.data.terms = JSON.parse(JSON.stringify(yrData.terms || []));
       this.data.events = JSON.parse(JSON.stringify(yrData.events || []));
       this.data.classes = JSON.parse(JSON.stringify(yrData.classes || []));
