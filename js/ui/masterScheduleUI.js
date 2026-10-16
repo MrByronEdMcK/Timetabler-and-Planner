@@ -92,7 +92,7 @@ export const MasterScheduleUI = {
     }
     if (!this.endTermId || !state.terms.find(t => t.id === this.endTermId)) {
       this.endTermId = state.terms[0].id;
-      this.endWeekNum = Math.min(4, state.terms[0].weeks || 10);
+      this.endWeekNum = Math.min(4, TermManager.getTermWeeks(state.terms[0]));
     }
   },
 
@@ -111,7 +111,7 @@ export const MasterScheduleUI = {
   _cachedTermsKey: null,
 
   getAllChronologicalTermWeeks() {
-    const currentKey = state.terms.map(t => `${t.id}_${t.startDate}_${t.endDate}_${t.weeks}`).join('|');
+    const currentKey = state.terms.map(t => `${t.id}_${t.startDate}_${t.endDate}_${TermManager.getTermWeeks(t)}`).join('|');
     if (this._cachedTermWeeks && this._cachedTermsKey === currentKey) {
       return this._cachedTermWeeks;
     }
@@ -119,7 +119,7 @@ export const MasterScheduleUI = {
     const sortedTerms = [...state.terms].sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
     const list = [];
     sortedTerms.forEach(term => {
-      const numWeeks = term.weeks || 10;
+      const numWeeks = TermManager.getTermWeeks(term);
       for (let w = 1; w <= numWeeks; w++) {
         list.push({ term, weekNum: w });
       }
@@ -160,7 +160,8 @@ export const MasterScheduleUI = {
       if (termMatch) {
         const d1 = new Date(termMatch.startDate);
         const d2 = new Date(currentD);
-        const diffWeeks = Math.max(1, Math.min(termMatch.weeks || 10, Math.floor((d2 - d1) / (7 * 24 * 3600 * 1000)) + 1));
+        const termWeeks = TermManager.getTermWeeks(termMatch);
+        const diffWeeks = Math.max(1, Math.min(termWeeks, Math.floor((d2 - d1) / (7 * 24 * 3600 * 1000)) + 1));
         return [{ term: termMatch, weekNum: diffWeeks }];
       }
 
@@ -253,7 +254,7 @@ export const MasterScheduleUI = {
 
     const populateWeeks = (termId, selectEl, currentVal) => {
       const term = state.terms.find(t => t.id === termId) || state.terms[0];
-      const numWeeks = term ? (term.weeks || 10) : 10;
+      const numWeeks = term ? TermManager.getTermWeeks(term) : 10;
       let weekHtml = '';
       for (let w = 1; w <= numWeeks; w++) {
         const selected = w === currentVal ? 'selected' : '';

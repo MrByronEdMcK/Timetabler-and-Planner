@@ -42,6 +42,39 @@ export const TermManager = {
   },
 
   /**
+   * Calculate exact number of school weeks between start and end dates.
+   * School weeks align to Monday-Friday in Australian schools.
+   */
+  calculateTermWeeks(startDateStr, endDateStr) {
+    if (!startDateStr || !endDateStr) return 10;
+    const start = this.parseLocalDate(startDateStr);
+    const end = this.parseLocalDate(endDateStr);
+    if (!start || !end || end < start) return 10;
+
+    const dayOfWeek = start.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    const diffToMon = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+    const monStart = new Date(start);
+    monStart.setDate(monStart.getDate() + diffToMon);
+
+    const diffTime = end.getTime() - monStart.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(1, Math.floor(diffDays / 7) + 1);
+  },
+
+  /**
+   * Get the week count for a term object, dynamically computed if start/end dates exist.
+   */
+  getTermWeeks(term) {
+    if (!term) return 10;
+    if (term.startDate && term.endDate) {
+      const computed = this.calculateTermWeeks(term.startDate, term.endDate);
+      term.weeks = computed;
+      return computed;
+    }
+    return term.weeks || 10;
+  },
+
+  /**
    * Check if a given date string (YYYY-MM-DD) falls within school term dates
    */
   getTermForDate(dateStr) {
@@ -120,10 +153,16 @@ export const TermManager = {
       const eDate = ev.endDate || ev.date || sDate;
       if (!sDate) return false;
       if (dateStr < sDate || dateStr > eDate) return false;
-      if (ev.affectedClassId && ev.affectedClassId !== classId) return false;
-      // Multi-day blockouts automatically block all periods across those days
-      if (eDate > sDate) return true;
-      if (ev.blockAllDay) return true;
+
+      // Multi-class checklist and legacy backward compatibility
+      const cIds = Array.isArray(ev.affectedClassIds) ? ev.affectedClassIds : (ev.affectedClassId ? [ev.affectedClassId] : []);
+      const affectsAllClasses = (cIds.length === 0 || cIds.includes('ALL'));
+      if (classId) {
+        if (!affectsAllClasses && !cIds.includes(classId)) return false;
+      }
+
+      // Multi-day blockout events or whole day events block all periods
+      if (ev.blockAllDay !== false) return true;
       if (periodId && ev.blockedPeriod === periodId) return true;
       return false;
     });

@@ -45,6 +45,28 @@ class TermManager:
         return datetime.date(parts[0], parts[1], parts[2])
 
     @staticmethod
+    def calculate_term_weeks(start_date_str, end_date_str):
+        if not start_date_str or not end_date_str:
+            return 10
+        start = TermManager.parse_date(start_date_str)
+        end = TermManager.parse_date(end_date_str)
+        if end < start:
+            return 10
+        mon_start = start - datetime.timedelta(days=start.weekday())
+        diff_days = (end - mon_start).days
+        return max(1, diff_days // 7 + 1)
+
+    @staticmethod
+    def get_term_weeks(term):
+        if not term:
+            return 10
+        if term.get('startDate') and term.get('endDate'):
+            computed = TermManager.calculate_term_weeks(term['startDate'], term['endDate'])
+            term['weeks'] = computed
+            return computed
+        return term.get('weeks', 10)
+
+    @staticmethod
     def get_term_for_date(terms, date_str):
         target = TermManager.parse_date(date_str)
         for term in terms:
@@ -379,6 +401,188 @@ def run():
         runner.assert_equal(len(clean_data['years']['2027']['classes']), 0, '2027 has 0 classes (empty)')
         runner.assert_equal(len(clean_data['years']['2027']['events']), 0, '2027 has 0 blockouts (empty)')
         runner.assert_equal(len(clean_data['years']['2027']['timetableSlots']), 0, '2027 timetable is empty')
+
+    # Test 12: Multi-Class Checklist & Whole Duration Multi-Day Blocking
+    print('\nTest 12: Multi-Class Checklist & Whole Duration Multi-Day Blocking')
+    runner.assert_true('event-classes-checklist' in index_html, 'index.html includes event-classes-checklist container')
+    runner.assert_true('renderClassChecklist' in app_js, 'app.js implements renderClassChecklist')
+    runner.assert_true('openEditEventModal' in app_js, 'app.js implements openEditEventModal')
+    runner.assert_true('edit-event-btn' in app_js, 'app.js renders edit-event-btn')
+
+    def test_get_blockout(events, date_str, class_id=None, period_id=None):
+        for ev in events:
+            s_date = ev.get('startDate') or ev.get('date')
+            e_date = ev.get('endDate') or ev.get('date') or s_date
+            if not s_date:
+                continue
+            if date_str < s_date or date_str > e_date:
+                continue
+            
+            c_ids = ev.get('affectedClassIds') if isinstance(ev.get('affectedClassIds'), list) else ([ev.get('affectedClassId')] if ev.get('affectedClassId') else [])
+            affects_all = (len(c_ids) == 0 or 'ALL' in c_ids)
+            if class_id:
+                if not affects_all and class_id not in c_ids:
+                    continue
+            
+            if ev.get('blockAllDay') is not False:
+                return ev
+            if period_id and ev.get('blockedPeriod') == period_id:
+                return ev
+        return None
+
+    # Scenario: Year 11 Exams multi-day (Nov 10 to Nov 13) affecting only 11MGN6 and 11MGN9
+    exam_events = [
+        {
+            'id': 'ev_y11_exams',
+            'title': 'Year 11 Exams',
+            'startDate': '2026-11-10',
+            'endDate': '2026-11-13',
+            'blockAllDay': True,
+            'affectedClassIds': ['c_11MGN6', 'c_11MGN9']
+        },
+        {
+            'id': 'ev_y10_exams',
+            'title': 'Year 10 Exams',
+            'startDate': '2026-11-13',
+            'endDate': '2026-11-13',
+            'blockAllDay': False,
+            'blockedPeriod': 'p4',
+            'affectedClassIds': ['c_10MGN6']
+        }
+    ]
+
+    # Tuesday Nov 10 (Day 1 of exams)
+    b_116_tue = test_get_blockout(exam_events, '2026-11-10', 'c_11MGN6', 'p1')
+    b_119_tue = test_get_blockout(exam_events, '2026-11-10', 'c_11MGN9', 'p3')
+    b_106_tue = test_get_blockout(exam_events, '2026-11-10', 'c_10MGN6', 'p2')
+    b_7mae_tue = test_get_blockout(exam_events, '2026-11-10', 'c_7MAE1', 'p4')
+
+    runner.assert_true(b_116_tue and b_116_tue['title'] == 'Year 11 Exams', 'Tuesday 11MGN6 P1 is blocked by Year 11 Exams')
+    runner.assert_true(b_119_tue and b_119_tue['title'] == 'Year 11 Exams', 'Tuesday 11MGN9 P3 is blocked by Year 11 Exams')
+    runner.assert_true(b_106_tue is None, 'Tuesday 10MGN6 is NOT blocked')
+    runner.assert_true(b_7mae_tue is None, 'Tuesday 7MAE1 is NOT blocked')
+
+    # Thursday Nov 12 (Day 3 of multi-day exams - whole duration test!)
+    b_116_thu_p5 = test_get_blockout(exam_events, '2026-11-12', 'c_11MGN6', 'p5')
+    b_116_thu_p6 = test_get_blockout(exam_events, '2026-11-12', 'c_11MGN6', 'p6')
+    b_119_thu_p4 = test_get_blockout(exam_events, '2026-11-12', 'c_11MGN9', 'p4')
+    b_106_thu_p3 = test_get_blockout(exam_events, '2026-11-12', 'c_10MGN6', 'p3')
+
+    runner.assert_true(b_116_thu_p5 and b_116_thu_p5['title'] == 'Year 11 Exams', 'Thursday 11MGN6 P5 is blocked across multi-day span')
+    runner.assert_true(b_116_thu_p6 and b_116_thu_p6['title'] == 'Year 11 Exams', 'Thursday 11MGN6 P6 is blocked across multi-day span')
+    runner.assert_true(b_119_thu_p4 and b_119_thu_p4['title'] == 'Year 11 Exams', 'Thursday 11MGN9 P4 is blocked across multi-day span')
+    runner.assert_true(b_106_thu_p3 is None, 'Thursday 10MGN6 P3 remains unblocked')
+
+    # Friday Nov 13 (Day 4 of multi-day exams)
+    b_119_fri_p1 = test_get_blockout(exam_events, '2026-11-13', 'c_11MGN9', 'p1')
+    b_116_fri_p2 = test_get_blockout(exam_events, '2026-11-13', 'c_11MGN6', 'p2')
+    b_7mae_fri_p3 = test_get_blockout(exam_events, '2026-11-13', 'c_7MAE1', 'p3')
+    b_106_fri_p4 = test_get_blockout(exam_events, '2026-11-13', 'c_10MGN6', 'p4')
+    b_106_fri_p1 = test_get_blockout(exam_events, '2026-11-13', 'c_10MGN6', 'p1')
+
+    runner.assert_true(b_119_fri_p1 and b_119_fri_p1['title'] == 'Year 11 Exams', 'Friday 11MGN9 P1 is blocked on final multi-day exam day')
+    runner.assert_true(b_116_fri_p2 and b_116_fri_p2['title'] == 'Year 11 Exams', 'Friday 11MGN6 P2 is blocked on final multi-day exam day')
+    runner.assert_true(b_7mae_fri_p3 is None, 'Friday 7MAE1 P3 is NOT blocked')
+    runner.assert_true(b_106_fri_p4 and b_106_fri_p4['title'] == 'Year 10 Exams', 'Friday 10MGN6 P4 blocked by single-day P4 blockout')
+    runner.assert_true(b_106_fri_p1 is None, 'Friday 10MGN6 P1 is open (non-targeted period)')
+
+    # Saturday Nov 14 (Post-span)
+    b_116_sat = test_get_blockout(exam_events, '2026-11-14', 'c_11MGN6', 'p1')
+    runner.assert_true(b_116_sat is None, 'Saturday date after exam span is NOT blocked')
+
+    # Test 13: Editing Blockout Events
+    print('\nTest 13: Editing Blockout Events')
+    runner.assert_true('event-edit-id' in index_html, 'index.html includes event-edit-id hidden input')
+    runner.assert_true('event-modal-title' in index_html, 'index.html includes event-modal-title element')
+    runner.assert_true('btn-submit-event' in index_html, 'index.html includes btn-submit-event element')
+
+    # Test in-place event modification
+    test_events = [
+        {'id': 'ev_editable', 'title': 'Old Title', 'startDate': '2026-06-01', 'endDate': '2026-06-01', 'blockAllDay': True, 'affectedClassIds': ['ALL']}
+    ]
+
+    # Simulate edit form submission
+    edit_id = 'ev_editable'
+    existing = next((e for e in test_events if e['id'] == edit_id), None)
+    runner.assert_true(existing is not None, 'Found target event to edit')
+    existing['title'] = 'Updated Camp Title'
+    existing['startDate'] = '2026-06-01'
+    existing['endDate'] = '2026-06-05'
+    existing['affectedClassIds'] = ['c_7MAE1', 'c_10MGN6']
+    existing['affectedClassId'] = None
+
+    runner.assert_equal(len(test_events), 1, 'Event count remains exactly 1 after in-place edit')
+    runner.assert_equal(test_events[0]['title'], 'Updated Camp Title', 'Title updated in place')
+    runner.assert_equal(test_events[0]['endDate'], '2026-06-05', 'End date updated in place for multi-day span')
+    runner.assert_equal(test_events[0]['affectedClassIds'], ['c_7MAE1', 'c_10MGN6'], 'Affected classes checklist updated')
+
+    # Verify updated event blocks targeted classes across span
+    b_edited_7 = test_get_blockout(test_events, '2026-06-03', 'c_7MAE1', 'p2')
+    b_edited_11 = test_get_blockout(test_events, '2026-06-03', 'c_11MGN6', 'p2')
+    runner.assert_true(b_edited_7 and b_edited_7['title'] == 'Updated Camp Title', 'Edited event blocks 7MAE1 mid-span')
+    runner.assert_true(b_edited_11 is None, 'Edited event does NOT block non-selected 11MGN6')
+
+    # Test 14: Dynamic Term Weeks Calculation & Calendar Span (Term 4 11-Week Fix)
+    print('\nTest 14: Dynamic Term Weeks Calculation & Calendar Span (Term 4 11-Week Fix)')
+    # 1. TermManager methods exist in code
+    runner.assert_true('calculateTermWeeks' in app_js, 'app.js implements calculateTermWeeks')
+    with open('js/termManager.js', 'r', encoding='utf-8') as f:
+        tm_js = f.read()
+    runner.assert_true('calculateTermWeeks' in tm_js, 'termManager.js implements calculateTermWeeks')
+    runner.assert_true('getTermWeeks' in app_js, 'app.js implements getTermWeeks')
+    runner.assert_true('getTermWeeks' in tm_js, 'termManager.js implements getTermWeeks')
+
+    # 2. Term week calculations for all standard Australian / Victorian terms
+    w_t4_vic = TermManager.calculate_term_weeks('2026-10-05', '2026-12-18')
+    runner.assert_equal(w_t4_vic, 11, 'Term 4 (2026-10-05 to 2026-12-18) is dynamically calculated as exactly 11 weeks')
+
+    w_t4_nsw = TermManager.calculate_term_weeks('2026-10-12', '2026-12-18')
+    runner.assert_equal(w_t4_nsw, 10, 'Term 4 starting a week later (2026-10-12 to 2026-12-18) is dynamically calculated as 10 weeks')
+
+    w_t1 = TermManager.calculate_term_weeks('2026-01-28', '2026-04-02')
+    runner.assert_equal(w_t1, 10, 'Term 1 (2026-01-28 to 2026-04-02) is dynamically calculated as 10 weeks')
+
+    w_t2 = TermManager.calculate_term_weeks('2026-04-20', '2026-07-03')
+    runner.assert_equal(w_t2, 11, 'Term 2 (2026-04-20 to 2026-07-03) is dynamically calculated as 11 weeks')
+
+    w_t3 = TermManager.calculate_term_weeks('2026-07-13', '2026-09-18')
+    runner.assert_equal(w_t3, 10, 'Term 3 (2026-07-13 to 2026-09-18) is dynamically calculated as 10 weeks')
+
+    # 3. get_term_weeks mutates/syncs term object
+    t4_obj = {'id': 't4', 'name': 'Term 4', 'startDate': '2026-10-05', 'endDate': '2026-12-18', 'weeks': 10}
+    synced_weeks = TermManager.get_term_weeks(t4_obj)
+    runner.assert_equal(synced_weeks, 11, 'get_term_weeks dynamically computes 11 for Term 4')
+    runner.assert_equal(t4_obj['weeks'], 11, 'get_term_weeks updates term.weeks in place to 11')
+
+    # 4. Master Schedule Chronological Weeks Generation includes Week 11 for Term 4
+    sample_terms = [
+        {'id': 't1', 'name': 'Term 1', 'startDate': '2026-01-28', 'endDate': '2026-04-02', 'weeks': 10},
+        {'id': 't2', 'name': 'Term 2', 'startDate': '2026-04-20', 'endDate': '2026-07-03', 'weeks': 11},
+        {'id': 't3', 'name': 'Term 3', 'startDate': '2026-07-13', 'endDate': '2026-09-18', 'weeks': 10},
+        {'id': 't4', 'name': 'Term 4', 'startDate': '2026-10-05', 'endDate': '2026-12-18', 'weeks': 10}
+    ]
+    chrono_weeks = []
+    for term in sample_terms:
+        num_weeks = TermManager.get_term_weeks(term)
+        for w in range(1, num_weeks + 1):
+            chrono_weeks.append({'term': term, 'weekNum': w})
+
+    t4_weeks = [cw for cw in chrono_weeks if cw['term']['id'] == 't4']
+    runner.assert_equal(len(t4_weeks), 11, 'Master Schedule includes exactly 11 weeks for Term 4')
+    runner.assert_true(any(cw['weekNum'] == 11 and cw['term']['id'] == 't4' for cw in chrono_weeks), 'Term 4 Week 11 is present in chronological weeks list')
+
+    # Verify Week 11 date range covers 14 Dec to 18 Dec 2026
+    w11_start = TermManager.parse_date('2026-10-05') + datetime.timedelta(days=(11 - 1) * 7)
+    w11_fri = w11_start + datetime.timedelta(days=4)
+    runner.assert_equal(w11_start.strftime('%Y-%m-%d'), '2026-12-14', 'Term 4 Week 11 starts on Monday 14 Dec 2026')
+    runner.assert_equal(w11_fri.strftime('%Y-%m-%d'), '2026-12-18', 'Term 4 Week 11 ends on Friday 18 Dec 2026 (calendar does not end a week early)')
+
+    # 5. Clean backup file has weeks: 11 for Term 4
+    with open('Timetable_Planner_Backup_Clean.json', 'r', encoding='utf-8') as f:
+        clean_data = json.load(f)
+    clean_t4 = next((t for t in clean_data.get('terms', []) if t.get('id') == 't4'), None)
+    runner.assert_true(clean_t4 is not None, 'Clean backup has Term 4')
+    runner.assert_equal(clean_t4.get('weeks'), 11, 'Clean backup Term 4 has weeks: 11')
 
     print('\n==================================================')
     print(f'Test Results: {runner.passes} PASSED, {runner.fails} FAILED')

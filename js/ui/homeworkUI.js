@@ -31,7 +31,7 @@ export const HomeworkUI = {
       const termStart = new Date(currentTerm.startDate);
       const curr = new Date(currentDate);
       const diffDays = Math.floor((curr - termStart) / (1000 * 60 * 60 * 24));
-      this.selectedWeekNum = Math.max(1, Math.min(currentTerm.weeks || 10, Math.floor(diffDays / 7) + 1));
+      this.selectedWeekNum = Math.max(1, Math.min(TermManager.getTermWeeks(currentTerm), Math.floor(diffDays / 7) + 1));
     }
   },
 
@@ -69,7 +69,7 @@ export const HomeworkUI = {
     }).join('');
 
     const term = state.terms.find(t => t.id === this.selectedTermId) || state.terms[0];
-    const totalWeeks = term ? (term.weeks || 10) : 10;
+    const totalWeeks = term ? TermManager.getTermWeeks(term) : 10;
 
     let weekHtml = '';
     for (let w = 1; w <= totalWeeks; w++) {
@@ -790,7 +790,7 @@ export const HomeworkUI = {
       if (termIdx > 0) {
         const prevTerm = state.terms[termIdx - 1];
         this.selectedTermId = prevTerm.id;
-        this.selectedWeekNum = prevTerm.weeks || 10;
+        this.selectedWeekNum = TermManager.getTermWeeks(prevTerm);
       }
     }
     this.renderTermAndWeekPicker();
@@ -799,7 +799,7 @@ export const HomeworkUI = {
 
   navigateToNextWeek() {
     const term = state.terms.find(t => t.id === this.selectedTermId) || state.terms[0];
-    const maxWeeks = term ? (term.weeks || 10) : 10;
+    const maxWeeks = term ? TermManager.getTermWeeks(term) : 10;
 
     if (this.selectedWeekNum < maxWeeks) {
       this.selectedWeekNum++;

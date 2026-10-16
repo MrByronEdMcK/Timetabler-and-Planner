@@ -41,7 +41,7 @@ export const CalendarUI = {
       <div class="term-card" data-id="${term.id}">
         <div class="term-header">
           <div class="term-name">${term.name}</div>
-          <span class="term-weeks-badge">${term.weeks || 10} Weeks</span>
+          <span class="term-weeks-badge">${TermManager.getTermWeeks(term)} Weeks</span>
         </div>
         <div class="form-group">
           <label class="form-label">Start Date</label>
@@ -65,8 +65,19 @@ export const CalendarUI = {
     }
 
     container.innerHTML = state.events.map(ev => {
-      const classObj = ev.affectedClassId ? state.classes.find(c => c.id === ev.affectedClassId) : null;
-      const classBadge = classObj ? `<span class="tag" style="background:${classObj.color}22; color:${classObj.color}">${classObj.name}</span>` : `<span class="tag tag-locked">All Classes</span>`;
+      // Multi-class badges
+      const classIds = Array.isArray(ev.affectedClassIds) ? ev.affectedClassIds : (ev.affectedClassId ? [ev.affectedClassId] : []);
+      let classBadge = '';
+      if (classIds.length === 0 || classIds.includes('ALL')) {
+        classBadge = `<span class="tag tag-locked">All Classes</span>`;
+      } else {
+        classBadge = classIds.map(cId => {
+          const classObj = state.classes.find(c => c.id === cId);
+          return classObj 
+            ? `<span class="tag" style="background:${classObj.color}22; color:${classObj.color}">${classObj.name}</span>`
+            : '';
+        }).filter(Boolean).join(' ');
+      }
       
       const sDate = ev.startDate || ev.date;
       const eDate = ev.endDate || ev.date || sDate;
@@ -76,10 +87,12 @@ export const CalendarUI = {
       let dateText = '';
 
       if (isMultiDay) {
-        periodBadge = `<span style="color:var(--warning); font-weight:700;">Multi-Day (All Periods Blocked)</span>`;
+        periodBadge = ev.blockAllDay !== false
+          ? `<span style="color:var(--warning); font-weight:700;">Multi-Day (All Periods Blocked)</span>`
+          : `<span style="color:var(--warning); font-weight:700;">Multi-Day (Period: ${ev.blockedPeriod})</span>`;
         dateText = `${TermManager.formatDisplayDate(sDate)} → ${TermManager.formatDisplayDate(eDate)}`;
       } else {
-        periodBadge = ev.blockAllDay ? `Whole Day` : `Blocked Period: ${ev.blockedPeriod}`;
+        periodBadge = ev.blockAllDay !== false ? `Whole Day` : `Blocked Period: ${ev.blockedPeriod}`;
         dateText = TermManager.formatDisplayDate(sDate);
       }
 
@@ -95,7 +108,10 @@ export const CalendarUI = {
               📅 ${dateText} • ${periodBadge} • ${classBadge}
             </div>
           </div>
-          <button class="btn btn-danger btn-sm delete-event-btn" data-id="${ev.id}">Delete</button>
+          <div style="display:flex; gap:0.4rem; align-items:center;">
+            <button type="button" class="btn btn-secondary btn-sm edit-event-btn" data-id="${ev.id}">Edit</button>
+            <button type="button" class="btn btn-danger btn-sm delete-event-btn" data-id="${ev.id}">Delete</button>
+          </div>
         </div>
       `;
     }).join('');
@@ -124,6 +140,14 @@ export const CalendarUI = {
         const term = state.terms.find(t => t.id === id);
         if (term) {
           term[field] = e.target.value;
+          term.weeks = TermManager.getTermWeeks(term);
+          const card = document.querySelector(`.term-card[data-id="${id}"]`);
+          if (card) {
+            const badge = card.querySelector('.term-weeks-badge');
+            if (badge) {
+              badge.textContent = `${term.weeks} Weeks`;
+            }
+          }
           state.saveState();
           window.dispatchEvent(new CustomEvent('planner:stateChanged'));
         }
@@ -138,7 +162,7 @@ export const CalendarUI = {
       }
     });
 
-    // Delete Event & Year Prev/Next Buttons
+    // Delete Event, Edit Event & Year Prev/Next Buttons
     document.addEventListener('click', (e) => {
       if (e.target.id === 'btn-year-prev' || e.target.closest('#btn-year-prev')) {
         handleYearChange(state.academicYear - 1);
@@ -146,12 +170,18 @@ export const CalendarUI = {
       if (e.target.id === 'btn-year-next' || e.target.closest('#btn-year-next')) {
         handleYearChange(state.academicYear + 1);
       }
-      if (e.target.classList.contains('delete-event-btn')) {
-        const id = e.target.getAttribute('data-id');
+      if (e.target.classList.contains('delete-event-btn') || e.target.closest('.delete-event-btn')) {
+        const btn = e.target.classList.contains('delete-event-btn') ? e.target : e.target.closest('.delete-event-btn');
+        const id = btn.getAttribute('data-id');
         state.data.events = state.events.filter(ev => ev.id !== id);
         state.saveState();
         this.renderEventsList();
         window.dispatchEvent(new CustomEvent('planner:stateChanged'));
+      }
+      if (e.target.classList.contains('edit-event-btn') || e.target.closest('.edit-event-btn')) {
+        const btn = e.target.classList.contains('edit-event-btn') ? e.target : e.target.closest('.edit-event-btn');
+        const id = btn.getAttribute('data-id');
+        this.openEditEventModal(id);
       }
     });
 
@@ -178,22 +208,12 @@ export const CalendarUI = {
           eventEndDateInput.value = startDate;
         }
         const isMultiDay = !!(eventEndDateInput.value && startDate && eventEndDateInput.value > startDate);
-        if (isMultiDay) {
-          if (blockAllDayCheckbox) {
-            blockAllDayCheckbox.checked = true;
-            blockAllDayCheckbox.disabled = true;
-          }
-          if (multidayNotice) multidayNotice.style.display = 'block';
-          if (periodGroup) periodGroup.style.display = 'none';
-        } else {
-          if (blockAllDayCheckbox) {
-            blockAllDayCheckbox.disabled = false;
-          }
-          if (multidayNotice) multidayNotice.style.display = 'none';
-          if (periodGroup) {
-            periodGroup.style.display = (blockAllDayCheckbox && blockAllDayCheckbox.checked) ? 'none' : 'block';
-          }
+        if (multidayNotice) {
+          multidayNotice.style.display = isMultiDay ? 'block' : 'none';
         }
+      }
+      if (periodGroup && blockAllDayCheckbox) {
+        periodGroup.style.display = blockAllDayCheckbox.checked ? 'none' : 'block';
       }
     };
 
@@ -206,7 +226,7 @@ export const CalendarUI = {
     }
     if (blockAllDayCheckbox) {
       blockAllDayCheckbox.addEventListener('change', () => {
-        if (periodGroup && !blockAllDayCheckbox.disabled) {
+        if (periodGroup) {
           periodGroup.style.display = blockAllDayCheckbox.checked ? 'none' : 'block';
         }
       });
@@ -216,29 +236,61 @@ export const CalendarUI = {
     if (eventForm) {
       eventForm.addEventListener('submit', (e) => {
         e.preventDefault();
+        const editId = document.getElementById('event-edit-id')?.value;
         const title = document.getElementById('event-title').value.trim();
         const startDate = document.getElementById('event-date').value;
         const endDateVal = document.getElementById('event-end-date')?.value;
         const endDate = (endDateVal && endDateVal >= startDate) ? endDateVal : startDate;
-        const isMultiDay = endDate > startDate;
         const type = document.getElementById('event-type').value;
-        const blockAllDay = isMultiDay ? true : document.getElementById('event-block-allday').checked;
-        const blockedPeriod = (isMultiDay || blockAllDay) ? null : document.getElementById('event-period-select').value;
-        const affectedClassId = document.getElementById('event-class-select').value || null;
+        const blockAllDayCheckbox = document.getElementById('event-block-allday');
+        const blockAllDay = blockAllDayCheckbox ? blockAllDayCheckbox.checked : true;
+        const blockedPeriod = blockAllDay ? null : document.getElementById('event-period-select')?.value;
 
-        const newEvent = {
-          id: `e_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-          title: title,
-          date: startDate,
-          startDate: startDate,
-          endDate: endDate,
-          type: type,
-          blockAllDay: blockAllDay,
-          blockedPeriod: blockedPeriod,
-          affectedClassId: affectedClassId
-        };
+        // Gather affected classes from checklist
+        const checkAll = document.getElementById('event-class-check-all');
+        const classBoxes = document.querySelectorAll('.event-class-checkbox');
+        let affectedClassIds = [];
+        if (checkAll && checkAll.checked) {
+          affectedClassIds = ['ALL'];
+        } else {
+          classBoxes.forEach(cb => {
+            if (cb.checked) affectedClassIds.push(cb.value);
+          });
+          if (affectedClassIds.length === 0 || affectedClassIds.length === state.classes.length) {
+            affectedClassIds = ['ALL'];
+          }
+        }
+        const affectedClassId = (affectedClassIds.length === 1 && affectedClassIds[0] !== 'ALL') ? affectedClassIds[0] : null;
 
-        state.data.events.push(newEvent);
+        if (editId) {
+          const existing = state.data.events.find(ev => ev.id === editId);
+          if (existing) {
+            existing.title = title;
+            existing.date = startDate;
+            existing.startDate = startDate;
+            existing.endDate = endDate;
+            existing.type = type;
+            existing.blockAllDay = blockAllDay;
+            existing.blockedPeriod = blockedPeriod;
+            existing.affectedClassIds = affectedClassIds;
+            existing.affectedClassId = affectedClassId;
+          }
+        } else {
+          const newEvent = {
+            id: `e_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+            title: title,
+            date: startDate,
+            startDate: startDate,
+            endDate: endDate,
+            type: type,
+            blockAllDay: blockAllDay,
+            blockedPeriod: blockedPeriod,
+            affectedClassIds: affectedClassIds,
+            affectedClassId: affectedClassId
+          };
+          state.data.events.push(newEvent);
+        }
+
         state.saveState();
         document.getElementById('modal-event-backdrop')?.classList.remove('active');
         eventForm.reset();
@@ -248,16 +300,65 @@ export const CalendarUI = {
     }
   },
 
+  renderClassChecklist(selectedIds = ['ALL']) {
+    const container = document.getElementById('event-classes-checklist');
+    if (!container) return;
+
+    const isAll = !selectedIds || selectedIds.length === 0 || selectedIds.includes('ALL') || (selectedIds.length === state.classes.length && state.classes.length > 0);
+
+    let html = `
+      <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:700; padding-bottom:0.35rem; border-bottom:1px solid var(--border-color);">
+        <input type="checkbox" id="event-class-check-all" ${isAll ? 'checked' : ''}>
+        <span>🌟 All Classes (Whole School)</span>
+      </label>
+    `;
+
+    state.classes.forEach(c => {
+      const checked = isAll || selectedIds.includes(c.id);
+      html += `
+        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.85rem; padding:0.15rem 0;">
+          <input type="checkbox" class="event-class-checkbox" value="${c.id}" ${checked ? 'checked' : ''}>
+          <span class="tag" style="background:${c.color}22; color:${c.color}; font-weight:700;">● ${c.name}</span>
+        </label>
+      `;
+    });
+
+    container.innerHTML = html;
+
+    const checkAll = document.getElementById('event-class-check-all');
+    const classBoxes = container.querySelectorAll('.event-class-checkbox');
+
+    if (checkAll) {
+      checkAll.addEventListener('change', () => {
+        classBoxes.forEach(cb => { cb.checked = checkAll.checked; });
+      });
+    }
+
+    classBoxes.forEach(cb => {
+      cb.addEventListener('change', () => {
+        const allChecked = Array.from(classBoxes).length > 0 && Array.from(classBoxes).every(b => b.checked);
+        if (checkAll) {
+          checkAll.checked = allChecked;
+        }
+      });
+    });
+  },
+
   openAddEventModal() {
     const modalBackdrop = document.getElementById('modal-event-backdrop');
     if (!modalBackdrop) return;
 
-    // Populate class selector dropdown inside modal
-    const classSelect = document.getElementById('event-class-select');
-    if (classSelect) {
-      classSelect.innerHTML = `<option value="">All Classes (Whole School)</option>` +
-        state.classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-    }
+    const titleEl = document.getElementById('event-modal-title');
+    if (titleEl) titleEl.textContent = 'Add Blockout Event';
+    const submitBtn = document.getElementById('btn-submit-event');
+    if (submitBtn) submitBtn.textContent = 'Save Event';
+    const editIdInput = document.getElementById('event-edit-id');
+    if (editIdInput) editIdInput.value = '';
+
+    const form = document.getElementById('form-add-event');
+    if (form) form.reset();
+
+    this.renderClassChecklist(['ALL']);
 
     // Populate period selector dropdown inside modal
     const periodSelect = document.getElementById('event-period-select');
@@ -288,6 +389,67 @@ export const CalendarUI = {
     }
     if (multidayNotice) multidayNotice.style.display = 'none';
     if (periodGroup) periodGroup.style.display = 'none';
+
+    modalBackdrop.classList.add('active');
+  },
+
+  openEditEventModal(eventId) {
+    const ev = state.events.find(e => e.id === eventId);
+    if (!ev) return;
+    const modalBackdrop = document.getElementById('modal-event-backdrop');
+    if (!modalBackdrop) return;
+
+    const titleEl = document.getElementById('event-modal-title');
+    if (titleEl) titleEl.textContent = 'Edit Blockout Event';
+    const submitBtn = document.getElementById('btn-submit-event');
+    if (submitBtn) submitBtn.textContent = 'Save Changes';
+    const editIdInput = document.getElementById('event-edit-id');
+    if (editIdInput) editIdInput.value = ev.id;
+
+    const titleInput = document.getElementById('event-title');
+    if (titleInput) titleInput.value = ev.title || '';
+
+    const sDate = ev.startDate || ev.date || '';
+    const eDate = ev.endDate || ev.date || sDate;
+    const eventDateInput = document.getElementById('event-date');
+    const eventEndDateInput = document.getElementById('event-end-date');
+    if (eventDateInput) eventDateInput.value = sDate;
+    if (eventEndDateInput) {
+      eventEndDateInput.value = (eDate && eDate !== sDate) ? eDate : '';
+      eventEndDateInput.min = sDate;
+    }
+
+    const typeSelect = document.getElementById('event-type');
+    if (typeSelect) typeSelect.value = ev.type || 'other';
+
+    const classIds = Array.isArray(ev.affectedClassIds) ? ev.affectedClassIds : (ev.affectedClassId ? [ev.affectedClassId] : ['ALL']);
+    this.renderClassChecklist(classIds);
+
+    const blockAllDayCheckbox = document.getElementById('event-block-allday');
+    if (blockAllDayCheckbox) {
+      blockAllDayCheckbox.checked = (ev.blockAllDay !== false);
+      blockAllDayCheckbox.disabled = false;
+    }
+
+    const periodSelect = document.getElementById('event-period-select');
+    if (periodSelect) {
+      if (state.periods) {
+        periodSelect.innerHTML = state.periods.filter(p => !p.isBreak).map(p =>
+          `<option value="${p.id}">${p.name}</option>`
+        ).join('');
+      }
+      if (ev.blockedPeriod) periodSelect.value = ev.blockedPeriod;
+    }
+
+    const periodGroup = document.getElementById('event-period-group');
+    if (periodGroup) {
+      periodGroup.style.display = (ev.blockAllDay !== false) ? 'none' : 'block';
+    }
+
+    const multidayNotice = document.getElementById('event-multiday-notice');
+    if (multidayNotice) {
+      multidayNotice.style.display = (eDate && eDate > sDate) ? 'block' : 'none';
+    }
 
     modalBackdrop.classList.add('active');
   }

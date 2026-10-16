@@ -367,6 +367,90 @@
       return 'Academic year switching cleanly isolates classes, timetable, and blockouts per year.';
     });
 
+    // 13. Multi-Class Checklist Blockout Events
+    test('Multi-Class Checklist Filtering & Whole Duration Blocking', () => {
+      const originalEvents = JSON.parse(JSON.stringify(state.events));
+      const class1 = state.classes[0] ? state.classes[0].id : 'c1';
+      const class2 = state.classes[1] ? state.classes[1].id : 'c2';
+      const class3 = state.classes[2] ? state.classes[2].id : 'c3';
+
+      state.data.events.push({
+        id: 'test_multi_class_event',
+        title: 'Senior Exams',
+        startDate: '2026-11-10',
+        endDate: '2026-11-13',
+        blockAllDay: true,
+        affectedClassIds: [class1, class2]
+      });
+
+      // Day 1
+      const b1 = TermManager.getBlockoutForDate('2026-11-10', class1, 'p1');
+      const b2 = TermManager.getBlockoutForDate('2026-11-10', class2, 'p3');
+      const b3 = TermManager.getBlockoutForDate('2026-11-10', class3, 'p2');
+      if (!b1 || b1.title !== 'Senior Exams') throw new Error('Class 1 Day 1 was not blocked');
+      if (!b2 || b2.title !== 'Senior Exams') throw new Error('Class 2 Day 1 was not blocked');
+      if (b3) throw new Error('Unselected Class 3 was incorrectly blocked');
+
+      // Day 3 (Whole duration)
+      const b1_d3 = TermManager.getBlockoutForDate('2026-11-12', class1, 'p5');
+      const b2_d3 = TermManager.getBlockoutForDate('2026-11-12', class2, 'p4');
+      const b3_d3 = TermManager.getBlockoutForDate('2026-11-12', class3, 'p1');
+      if (!b1_d3 || b1_d3.title !== 'Senior Exams') throw new Error('Class 1 Day 3 was not blocked across span');
+      if (!b2_d3 || b2_d3.title !== 'Senior Exams') throw new Error('Class 2 Day 3 was not blocked across span');
+      if (b3_d3) throw new Error('Unselected Class 3 was incorrectly blocked on Day 3');
+
+      state.data.events = originalEvents;
+      state.saveState();
+      return 'Multi-class checklist correctly filters and blocks selected classes across entire multi-day span.';
+    });
+
+    // 14. Event Editing
+    test('Blockout Event In-Place Editing', () => {
+      const originalEvents = JSON.parse(JSON.stringify(state.events));
+      state.data.events.push({
+        id: 'test_edit_event',
+        title: 'Initial Event',
+        startDate: '2026-08-10',
+        endDate: '2026-08-10',
+        blockAllDay: true,
+        affectedClassIds: ['ALL']
+      });
+
+      const existing = state.data.events.find(e => e.id === 'test_edit_event');
+      if (!existing) throw new Error('Failed to find event to edit');
+      existing.title = 'Updated Multi-Day Camp';
+      existing.endDate = '2026-08-14';
+      state.saveState();
+
+      const updated = state.events.find(e => e.id === 'test_edit_event');
+      if (updated.title !== 'Updated Multi-Day Camp') throw new Error('Title was not updated');
+      if (updated.endDate !== '2026-08-14') throw new Error('End date was not updated');
+
+      const midSpan = TermManager.getBlockoutForDate('2026-08-12', null, 'p1');
+      if (!midSpan || midSpan.title !== 'Updated Multi-Day Camp') throw new Error('Edited event does not block mid-span date');
+
+      state.data.events = originalEvents;
+      state.saveState();
+      return 'Blockout events can be modified in place and update scheduling spans immediately.';
+    });
+
+    // 15. Dynamic Term Weeks Calculation & Calendar Span (Term 4 11-Week Fix)
+    test('Dynamic Term Weeks Calculation & Calendar Span', () => {
+      if (typeof TermManager.calculateTermWeeks !== 'function') throw new Error('TermManager.calculateTermWeeks is not defined');
+      if (typeof TermManager.getTermWeeks !== 'function') throw new Error('TermManager.getTermWeeks is not defined');
+
+      // Term 4 (2026-10-05 to 2026-12-18)
+      const w4 = TermManager.calculateTermWeeks('2026-10-05', '2026-12-18');
+      if (w4 !== 11) throw new Error(`Expected 11 weeks for Term 4, got ${w4}`);
+
+      const t4_test = { id: 't4', name: 'Term 4', startDate: '2026-10-05', endDate: '2026-12-18', weeks: 10 };
+      const computed = TermManager.getTermWeeks(t4_test);
+      if (computed !== 11) throw new Error(`Expected 11 weeks from getTermWeeks, got ${computed}`);
+      if (t4_test.weeks !== 11) throw new Error(`Expected term.weeks to be mutated to 11, got ${t4_test.weeks}`);
+
+      return 'Term 4 duration is dynamically calculated as 11 weeks and updates master calendar span through 18 Dec 2026.';
+    });
+
     const elapsed = Math.round(performance.now() - startTime);
 
     // Update UI

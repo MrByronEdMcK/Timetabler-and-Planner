@@ -7,12 +7,32 @@
 
   const STORAGE_KEY = 'aus_teacher_timetabler_state_v3';
 
+  // Helper to calculate exact school weeks between start and end dates (Mon-Fri)
+  function calculateTermWeeks(startDateStr, endDateStr) {
+    if (!startDateStr || !endDateStr) return 10;
+    let start = null, end = null;
+    const p1 = String(startDateStr).split('-').map(Number);
+    if (p1.length === 3 && !isNaN(p1[0])) start = new Date(p1[0], p1[1] - 1, p1[2], 12, 0, 0);
+    const p2 = String(endDateStr).split('-').map(Number);
+    if (p2.length === 3 && !isNaN(p2[0])) end = new Date(p2[0], p2[1] - 1, p2[2], 12, 0, 0);
+    if (!start || !end || end < start) return 10;
+
+    const dayOfWeek = start.getDay();
+    const diffToMon = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+    const monStart = new Date(start);
+    monStart.setDate(monStart.getDate() + diffToMon);
+
+    const diffTime = end.getTime() - monStart.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(1, Math.floor(diffDays / 7) + 1);
+  }
+
   // Default School Terms (2026 Sample Default)
   const DEFAULT_TERMS = [
     { id: 't1', name: 'Term 1', startDate: '2026-01-28', endDate: '2026-04-02', weeks: 10 },
     { id: 't2', name: 'Term 2', startDate: '2026-04-20', endDate: '2026-07-03', weeks: 11 },
-    { id: 't3', name: 'Term 3', startDate: '2026-07-20', endDate: '2026-09-25', weeks: 10 },
-    { id: 't4', name: 'Term 4', startDate: '2026-10-12', endDate: '2026-12-18', weeks: 10 }
+    { id: 't3', name: 'Term 3', startDate: '2026-07-13', endDate: '2026-09-18', weeks: 10 },
+    { id: 't4', name: 'Term 4', startDate: '2026-10-05', endDate: '2026-12-18', weeks: 11 }
   ];
 
   // Default Configurable Periods with Native Start & End Times (Req 2)
@@ -313,6 +333,9 @@
                       t.endDate = t.endDate.replace(/^\d{4}/, yStr);
                       termsMismatch = true;
                     }
+                    if (t.startDate && t.endDate) {
+                      t.weeks = calculateTermWeeks(t.startDate, t.endDate);
+                    }
                   });
                 }
                 // If this year had mismatched terms and classes duplicate dataYear classes from legacy cloning, reset
@@ -331,11 +354,16 @@
 
             if (!years[year]) {
               const yrStr = String(year);
-              const newTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS)).map(term => ({
-                ...term,
-                startDate: term.startDate.replace(/^\d{4}/, yrStr),
-                endDate: term.endDate.replace(/^\d{4}/, yrStr)
-              }));
+              const newTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS)).map(term => {
+                const s = term.startDate.replace(/^\d{4}/, yrStr);
+                const e = term.endDate.replace(/^\d{4}/, yrStr);
+                return {
+                  ...term,
+                  startDate: s,
+                  endDate: e,
+                  weeks: calculateTermWeeks(s, e)
+                };
+              });
               years[year] = {
                 terms: newTerms,
                 classes: [],
@@ -349,13 +377,21 @@
             }
 
             const curYrData = years[year];
+            const curTerms = curYrData.terms || def.terms;
+            if (Array.isArray(curTerms)) {
+              curTerms.forEach(t => {
+                if (t.startDate && t.endDate) {
+                  t.weeks = calculateTermWeeks(t.startDate, t.endDate);
+                }
+              });
+            }
 
             return {
               ...def,
               ...parsed,
               academicYear: year,
               currentDate: curYrData.currentDate || parsed.currentDate || `${year}-07-22`,
-              terms: curYrData.terms || def.terms,
+              terms: curTerms,
               classes: curYrData.classes || [],
               events: curYrData.events || [],
               timetableSlots: curYrData.timetableSlots || {},
@@ -585,6 +621,9 @@
                 t.endDate = t.endDate.replace(/^\d{4}/, yStr);
                 termsMismatch = true;
               }
+              if (t.startDate && t.endDate) {
+                t.weeks = calculateTermWeeks(t.startDate, t.endDate);
+              }
             });
           }
           if (yNum !== dataYear && termsMismatch && years[dataYear]) {
@@ -602,11 +641,16 @@
 
       if (!years[2027]) {
         const yrStr = '2027';
-        const terms2027 = JSON.parse(JSON.stringify(years[dataYear]?.terms || DEFAULT_TERMS)).map(t => ({
-          ...t,
-          startDate: t.startDate ? t.startDate.replace(/^\d{4}/, yrStr) : `${yrStr}-01-28`,
-          endDate: t.endDate ? t.endDate.replace(/^\d{4}/, yrStr) : `${yrStr}-04-02`
-        }));
+        const terms2027 = JSON.parse(JSON.stringify(years[dataYear]?.terms || DEFAULT_TERMS)).map(t => {
+          const s = t.startDate ? t.startDate.replace(/^\d{4}/, yrStr) : `${yrStr}-01-28`;
+          const e = t.endDate ? t.endDate.replace(/^\d{4}/, yrStr) : `${yrStr}-04-02`;
+          return {
+            ...t,
+            startDate: s,
+            endDate: e,
+            weeks: calculateTermWeeks(s, e)
+          };
+        });
         years[2027] = {
           terms: terms2027,
           classes: [],
@@ -732,6 +776,9 @@
               term.endDate = term.endDate.replace(/^\d{4}/, yrStr);
               hadWrongYearTerms = true;
             }
+            if (term.startDate && term.endDate) {
+              term.weeks = calculateTermWeeks(term.startDate, term.endDate);
+            }
           });
         }
 
@@ -748,6 +795,13 @@
         }
 
         this.data.terms = JSON.parse(JSON.stringify(yrData.terms || []));
+        if (Array.isArray(this.data.terms)) {
+          this.data.terms.forEach(term => {
+            if (term.startDate && term.endDate) {
+              term.weeks = calculateTermWeeks(term.startDate, term.endDate);
+            }
+          });
+        }
         this.data.events = JSON.parse(JSON.stringify(yrData.events || []));
         this.data.classes = JSON.parse(JSON.stringify(yrData.classes || []));
         this.data.timetableSlots = JSON.parse(JSON.stringify(yrData.timetableSlots || {}));
@@ -758,11 +812,16 @@
       } else {
         // Brand new year! Initialize empty events, classes, timetable
         const yrStr = String(yr);
-        const newTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS)).map(term => ({
-          ...term,
-          startDate: term.startDate.replace(/^\d{4}/, yrStr),
-          endDate: term.endDate.replace(/^\d{4}/, yrStr)
-        }));
+        const newTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS)).map(term => {
+          const s = term.startDate.replace(/^\d{4}/, yrStr);
+          const e = term.endDate.replace(/^\d{4}/, yrStr);
+          return {
+            ...term,
+            startDate: s,
+            endDate: e,
+            weeks: calculateTermWeeks(s, e)
+          };
+        });
 
         this.data.terms = newTerms;
         this.data.events = [];
@@ -1012,6 +1071,20 @@
       return formatLocalDate(d);
     },
 
+    calculateTermWeeks(startDateStr, endDateStr) {
+      return calculateTermWeeks(startDateStr, endDateStr);
+    },
+
+    getTermWeeks(term) {
+      if (!term) return 10;
+      if (term.startDate && term.endDate) {
+        const computed = calculateTermWeeks(term.startDate, term.endDate);
+        term.weeks = computed;
+        return computed;
+      }
+      return term.weeks || 10;
+    },
+
     getTermForDate(dateStr) {
       if (!dateStr) return null;
       const target = parseLocalDate(dateStr);
@@ -1061,10 +1134,16 @@
         const eDate = ev.endDate || ev.date || sDate;
         if (!sDate) return false;
         if (dateStr < sDate || dateStr > eDate) return false;
-        if (ev.affectedClassId && ev.affectedClassId !== classId) return false;
-        // Multi-day blockout events automatically block all periods across those days
-        if (eDate > sDate) return true;
-        if (ev.blockAllDay) return true;
+
+        // Multi-class checklist and legacy backward compatibility
+        const cIds = Array.isArray(ev.affectedClassIds) ? ev.affectedClassIds : (ev.affectedClassId ? [ev.affectedClassId] : []);
+        const affectsAllClasses = (cIds.length === 0 || cIds.includes('ALL'));
+        if (classId) {
+          if (!affectsAllClasses && !cIds.includes(classId)) return false;
+        }
+
+        // Multi-day blockout events or whole day events block all periods
+        if (ev.blockAllDay !== false) return true;
         if (periodId && ev.blockedPeriod === periodId) return true;
         return false;
       });
@@ -1658,7 +1737,7 @@
         <div class="term-card" data-id="${term.id}">
           <div class="term-header">
             <div class="term-name">${term.name}</div>
-            <span class="term-weeks-badge">${term.weeks || 10} Weeks</span>
+            <span class="term-weeks-badge">${TermManager.getTermWeeks(term)} Weeks</span>
           </div>
           <div class="form-group">
             <label class="form-label">Start Date</label>
@@ -1682,8 +1761,19 @@
       }
 
       container.innerHTML = state.events.map(ev => {
-        const classObj = ev.affectedClassId ? state.classes.find(c => c.id === ev.affectedClassId) : null;
-        const classBadge = classObj ? `<span class="tag" style="background:${classObj.color}22; color:${classObj.color}">${classObj.name}</span>` : `<span class="tag tag-locked">All Classes</span>`;
+        // Multi-class badges
+        const classIds = Array.isArray(ev.affectedClassIds) ? ev.affectedClassIds : (ev.affectedClassId ? [ev.affectedClassId] : []);
+        let classBadge = '';
+        if (classIds.length === 0 || classIds.includes('ALL')) {
+          classBadge = `<span class="tag tag-locked">All Classes</span>`;
+        } else {
+          classBadge = classIds.map(cId => {
+            const classObj = state.classes.find(c => c.id === cId);
+            return classObj 
+              ? `<span class="tag" style="background:${classObj.color}22; color:${classObj.color}">${classObj.name}</span>`
+              : '';
+          }).filter(Boolean).join(' ');
+        }
         
         const sDate = ev.startDate || ev.date;
         const eDate = ev.endDate || ev.date || sDate;
@@ -1693,10 +1783,12 @@
         let dateText = '';
 
         if (isMultiDay) {
-          periodBadge = `<span style="color:var(--warning); font-weight:700;">Multi-Day (All Periods Blocked)</span>`;
+          periodBadge = ev.blockAllDay !== false
+            ? `<span style="color:var(--warning); font-weight:700;">Multi-Day (All Periods Blocked)</span>`
+            : `<span style="color:var(--warning); font-weight:700;">Multi-Day (Period: ${ev.blockedPeriod})</span>`;
           dateText = `${TermManager.formatDisplayDate(sDate)} → ${TermManager.formatDisplayDate(eDate)}`;
         } else {
-          periodBadge = ev.blockAllDay ? `Whole Day` : `Blocked Period: ${ev.blockedPeriod}`;
+          periodBadge = ev.blockAllDay !== false ? `Whole Day` : `Blocked Period: ${ev.blockedPeriod}`;
           dateText = TermManager.formatDisplayDate(sDate);
         }
 
@@ -1712,7 +1804,10 @@
                 📅 ${dateText} • ${periodBadge} • ${classBadge}
               </div>
             </div>
-            <button class="btn btn-danger btn-sm delete-event-btn" data-id="${ev.id}">Delete</button>
+            <div style="display:flex; gap:0.4rem; align-items:center;">
+              <button type="button" class="btn btn-secondary btn-sm edit-event-btn" data-id="${ev.id}">Edit</button>
+              <button type="button" class="btn btn-danger btn-sm delete-event-btn" data-id="${ev.id}">Delete</button>
+            </div>
           </div>
         `;
       }).join('');
@@ -1750,7 +1845,19 @@
           const term = state.terms.find(t => t.id === id);
           if (term) {
             term[field] = e.target.value;
+            term.weeks = TermManager.getTermWeeks(term);
+            const card = document.querySelector(`.term-card[data-id="${id}"]`);
+            if (card) {
+              const badge = card.querySelector('.term-weeks-badge');
+              if (badge) {
+                badge.textContent = `${term.weeks} Weeks`;
+              }
+            }
             state.saveState();
+            if (typeof MasterScheduleUI !== 'undefined') {
+              MasterScheduleUI._cachedTermWeeks = null;
+              MasterScheduleUI._cachedTermsKey = null;
+            }
             refreshAllViews(false, true);
           }
         }
@@ -1771,12 +1878,18 @@
         if (e.target.id === 'btn-year-next' || e.target.closest('#btn-year-next')) {
           handleYearChange(state.academicYear + 1);
         }
-        if (e.target.classList.contains('delete-event-btn')) {
-          const id = e.target.getAttribute('data-id');
+        if (e.target.classList.contains('delete-event-btn') || e.target.closest('.delete-event-btn')) {
+          const btn = e.target.classList.contains('delete-event-btn') ? e.target : e.target.closest('.delete-event-btn');
+          const id = btn.getAttribute('data-id');
           state.data.events = state.events.filter(ev => ev.id !== id);
           state.saveState();
           this.renderEventsList();
           refreshAllViews(false, true);
+        }
+        if (e.target.classList.contains('edit-event-btn') || e.target.closest('.edit-event-btn')) {
+          const btn = e.target.classList.contains('edit-event-btn') ? e.target : e.target.closest('.edit-event-btn');
+          const id = btn.getAttribute('data-id');
+          this.openEditEventModal(id);
         }
       });
 
@@ -1803,22 +1916,12 @@
             eventEndDateInput.value = startDate;
           }
           const isMultiDay = !!(eventEndDateInput.value && startDate && eventEndDateInput.value > startDate);
-          if (isMultiDay) {
-            if (blockAllDayCheckbox) {
-              blockAllDayCheckbox.checked = true;
-              blockAllDayCheckbox.disabled = true;
-            }
-            if (multidayNotice) multidayNotice.style.display = 'block';
-            if (periodGroup) periodGroup.style.display = 'none';
-          } else {
-            if (blockAllDayCheckbox) {
-              blockAllDayCheckbox.disabled = false;
-            }
-            if (multidayNotice) multidayNotice.style.display = 'none';
-            if (periodGroup) {
-              periodGroup.style.display = (blockAllDayCheckbox && blockAllDayCheckbox.checked) ? 'none' : 'block';
-            }
+          if (multidayNotice) {
+            multidayNotice.style.display = isMultiDay ? 'block' : 'none';
           }
+        }
+        if (periodGroup && blockAllDayCheckbox) {
+          periodGroup.style.display = blockAllDayCheckbox.checked ? 'none' : 'block';
         }
       };
 
@@ -1831,21 +1934,72 @@
       }
       if (blockAllDayCheckbox) {
         blockAllDayCheckbox.addEventListener('change', () => {
-          if (periodGroup && !blockAllDayCheckbox.disabled) {
+          if (periodGroup) {
             periodGroup.style.display = blockAllDayCheckbox.checked ? 'none' : 'block';
           }
         });
       }
     },
 
+    renderClassChecklist(selectedIds = ['ALL']) {
+      const container = document.getElementById('event-classes-checklist');
+      if (!container) return;
+
+      const isAll = !selectedIds || selectedIds.length === 0 || selectedIds.includes('ALL') || (selectedIds.length === state.classes.length && state.classes.length > 0);
+
+      let html = `
+        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:700; padding-bottom:0.35rem; border-bottom:1px solid var(--border-color);">
+          <input type="checkbox" id="event-class-check-all" ${isAll ? 'checked' : ''}>
+          <span>🌟 All Classes (Whole School)</span>
+        </label>
+      `;
+
+      state.classes.forEach(c => {
+        const checked = isAll || selectedIds.includes(c.id);
+        html += `
+          <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.85rem; padding:0.15rem 0;">
+            <input type="checkbox" class="event-class-checkbox" value="${c.id}" ${checked ? 'checked' : ''}>
+            <span class="tag" style="background:${c.color}22; color:${c.color}; font-weight:700;">● ${c.name}</span>
+          </label>
+        `;
+      });
+
+      container.innerHTML = html;
+
+      const checkAll = document.getElementById('event-class-check-all');
+      const classBoxes = container.querySelectorAll('.event-class-checkbox');
+
+      if (checkAll) {
+        checkAll.addEventListener('change', () => {
+          classBoxes.forEach(cb => { cb.checked = checkAll.checked; });
+        });
+      }
+
+      classBoxes.forEach(cb => {
+        cb.addEventListener('change', () => {
+          const allChecked = Array.from(classBoxes).length > 0 && Array.from(classBoxes).every(b => b.checked);
+          if (checkAll) {
+            checkAll.checked = allChecked;
+          }
+        });
+      });
+    },
+
     openAddEventModal() {
       const modalBackdrop = document.getElementById('modal-event-backdrop');
       if (!modalBackdrop) return;
-      const classSelect = document.getElementById('event-class-select');
-      if (classSelect) {
-        classSelect.innerHTML = `<option value="">All Classes (Whole School)</option>` +
-          state.classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-      }
+
+      const titleEl = document.getElementById('event-modal-title');
+      if (titleEl) titleEl.textContent = 'Add Blockout Event';
+      const submitBtn = document.getElementById('btn-submit-event');
+      if (submitBtn) submitBtn.textContent = 'Save Event';
+      const editIdInput = document.getElementById('event-edit-id');
+      if (editIdInput) editIdInput.value = '';
+
+      const form = document.getElementById('form-add-event');
+      if (form) form.reset();
+
+      this.renderClassChecklist(['ALL']);
 
       // Populate period selector dropdown inside modal
       const periodSelect = document.getElementById('event-period-select');
@@ -1876,6 +2030,67 @@
       }
       if (multidayNotice) multidayNotice.style.display = 'none';
       if (periodGroup) periodGroup.style.display = 'none';
+
+      modalBackdrop.classList.add('active');
+    },
+
+    openEditEventModal(eventId) {
+      const ev = state.events.find(e => e.id === eventId);
+      if (!ev) return;
+      const modalBackdrop = document.getElementById('modal-event-backdrop');
+      if (!modalBackdrop) return;
+
+      const titleEl = document.getElementById('event-modal-title');
+      if (titleEl) titleEl.textContent = 'Edit Blockout Event';
+      const submitBtn = document.getElementById('btn-submit-event');
+      if (submitBtn) submitBtn.textContent = 'Save Changes';
+      const editIdInput = document.getElementById('event-edit-id');
+      if (editIdInput) editIdInput.value = ev.id;
+
+      const titleInput = document.getElementById('event-title');
+      if (titleInput) titleInput.value = ev.title || '';
+
+      const sDate = ev.startDate || ev.date || '';
+      const eDate = ev.endDate || ev.date || sDate;
+      const eventDateInput = document.getElementById('event-date');
+      const eventEndDateInput = document.getElementById('event-end-date');
+      if (eventDateInput) eventDateInput.value = sDate;
+      if (eventEndDateInput) {
+        eventEndDateInput.value = (eDate && eDate !== sDate) ? eDate : '';
+        eventEndDateInput.min = sDate;
+      }
+
+      const typeSelect = document.getElementById('event-type');
+      if (typeSelect) typeSelect.value = ev.type || 'other';
+
+      const classIds = Array.isArray(ev.affectedClassIds) ? ev.affectedClassIds : (ev.affectedClassId ? [ev.affectedClassId] : ['ALL']);
+      this.renderClassChecklist(classIds);
+
+      const blockAllDayCheckbox = document.getElementById('event-block-allday');
+      if (blockAllDayCheckbox) {
+        blockAllDayCheckbox.checked = (ev.blockAllDay !== false);
+        blockAllDayCheckbox.disabled = false;
+      }
+
+      const periodSelect = document.getElementById('event-period-select');
+      if (periodSelect) {
+        if (state.periods) {
+          periodSelect.innerHTML = state.periods.filter(p => !p.isBreak).map(p =>
+            `<option value="${p.id}">${p.name}</option>`
+          ).join('');
+        }
+        if (ev.blockedPeriod) periodSelect.value = ev.blockedPeriod;
+      }
+
+      const periodGroup = document.getElementById('event-period-group');
+      if (periodGroup) {
+        periodGroup.style.display = (ev.blockAllDay !== false) ? 'none' : 'block';
+      }
+
+      const multidayNotice = document.getElementById('event-multiday-notice');
+      if (multidayNotice) {
+        multidayNotice.style.display = (eDate && eDate > sDate) ? 'block' : 'none';
+      }
 
       modalBackdrop.classList.add('active');
     }
@@ -2637,7 +2852,7 @@
       const updateWeeks = () => {
         const termId = termSelect.value;
         const term = state.terms.find(t => t.id === termId) || state.terms[0];
-        const numWeeks = term ? (term.weeks || 10) : 10;
+        const numWeeks = term ? TermManager.getTermWeeks(term) : 10;
         let weekHtml = '';
         for (let w = 1; w <= numWeeks; w++) {
           weekHtml += `<option value="${w}">Week ${w}</option>`;
@@ -3322,7 +3537,7 @@
       }
       if (!this.endTermId || !state.terms.find(t => t.id === this.endTermId)) {
         this.endTermId = state.terms[0].id;
-        this.endWeekNum = Math.min(4, state.terms[0].weeks || 10);
+        this.endWeekNum = Math.min(4, TermManager.getTermWeeks(state.terms[0]));
       }
     },
 
@@ -3341,7 +3556,7 @@
     _cachedTermsKey: null,
 
     getAllChronologicalTermWeeks() {
-      const currentKey = state.terms.map(t => `${t.id}_${t.startDate}_${t.endDate}_${t.weeks}`).join('|');
+      const currentKey = state.terms.map(t => `${t.id}_${t.startDate}_${t.endDate}_${TermManager.getTermWeeks(t)}`).join('|');
       if (this._cachedTermWeeks && this._cachedTermsKey === currentKey) {
         return this._cachedTermWeeks;
       }
@@ -3349,7 +3564,7 @@
       const sortedTerms = [...state.terms].sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
       const list = [];
       sortedTerms.forEach(term => {
-        const numWeeks = term.weeks || 10;
+        const numWeeks = TermManager.getTermWeeks(term);
         for (let w = 1; w <= numWeeks; w++) {
           list.push({ term, weekNum: w });
         }
@@ -3393,7 +3608,8 @@
           const d2 = TermManager.parseLocalDate(currentD);
           if (d1 && d2) {
             const diffDays = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
-            const diffWeeks = Math.max(1, Math.min(termMatch.weeks || 10, Math.floor(diffDays / 7) + 1));
+            const termWeeks = TermManager.getTermWeeks(termMatch);
+            const diffWeeks = Math.max(1, Math.min(termWeeks, Math.floor(diffDays / 7) + 1));
             return [{ term: termMatch, weekNum: diffWeeks }];
           }
         }
@@ -3487,7 +3703,7 @@
 
       const populateWeeks = (termId, selectEl, currentVal) => {
         const term = state.terms.find(t => t.id === termId) || state.terms[0];
-        const numWeeks = term ? (term.weeks || 10) : 10;
+        const numWeeks = term ? TermManager.getTermWeeks(term) : 10;
         let weekHtml = '';
         for (let w = 1; w <= numWeeks; w++) {
           const selected = w === currentVal ? 'selected' : '';
@@ -4594,7 +4810,7 @@
         const curr = TermManager.parseLocalDate(currentDate);
         if (termStart && curr) {
           const diffDays = Math.round((curr - termStart) / (1000 * 60 * 60 * 24));
-          this.selectedWeekNum = Math.max(1, Math.min(currentTerm.weeks || 10, Math.floor(diffDays / 7) + 1));
+          this.selectedWeekNum = Math.max(1, Math.min(TermManager.getTermWeeks(currentTerm), Math.floor(diffDays / 7) + 1));
         }
       }
     },
@@ -4633,7 +4849,7 @@
       }).join('');
 
       const term = state.terms.find(t => t.id === this.selectedTermId) || state.terms[0];
-      const totalWeeks = term ? (term.weeks || 10) : 10;
+      const totalWeeks = term ? TermManager.getTermWeeks(term) : 10;
 
       let weekHtml = '';
       for (let w = 1; w <= totalWeeks; w++) {
@@ -5381,7 +5597,7 @@
         if (termIdx > 0) {
           const prevTerm = state.terms[termIdx - 1];
           this.selectedTermId = prevTerm.id;
-          this.selectedWeekNum = prevTerm.weeks || 10;
+          this.selectedWeekNum = TermManager.getTermWeeks(prevTerm);
         }
       }
       this.renderTermAndWeekPicker();
@@ -5390,7 +5606,7 @@
 
     navigateToNextWeek() {
       const term = state.terms.find(t => t.id === this.selectedTermId) || state.terms[0];
-      const maxWeeks = term ? (term.weeks || 10) : 10;
+      const maxWeeks = term ? TermManager.getTermWeeks(term) : 10;
 
       if (this.selectedWeekNum < maxWeeks) {
         this.selectedWeekNum++;
@@ -5963,39 +6179,72 @@
       });
     }
 
-    // Add Event Form
+    // Add / Edit Event Form
     const eventForm = document.getElementById('form-add-event');
     if (eventForm) {
       eventForm.addEventListener('submit', (e) => {
         e.preventDefault();
+        const editId = document.getElementById('event-edit-id')?.value;
         const title = document.getElementById('event-title').value.trim();
         const startDate = document.getElementById('event-date').value;
         const endDateVal = document.getElementById('event-end-date')?.value;
         const endDate = (endDateVal && endDateVal >= startDate) ? endDateVal : startDate;
-        const isMultiDay = endDate > startDate;
         const type = document.getElementById('event-type').value;
-        const blockAllDay = isMultiDay ? true : document.getElementById('event-block-allday').checked;
-        const blockedPeriod = (isMultiDay || blockAllDay) ? null : document.getElementById('event-period-select').value;
-        const affectedClassId = document.getElementById('event-class-select').value || null;
+        const blockAllDayCheckbox = document.getElementById('event-block-allday');
+        const blockAllDay = blockAllDayCheckbox ? blockAllDayCheckbox.checked : true;
+        const blockedPeriod = blockAllDay ? null : document.getElementById('event-period-select')?.value;
 
-        const newEvent = {
-          id: `e_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-          title: title,
-          date: startDate,
-          startDate: startDate,
-          endDate: endDate,
-          type: type,
-          blockAllDay: blockAllDay,
-          blockedPeriod: blockedPeriod,
-          affectedClassId: affectedClassId
-        };
+        // Gather affected classes from checklist
+        const checkAll = document.getElementById('event-class-check-all');
+        const classBoxes = document.querySelectorAll('.event-class-checkbox');
+        let affectedClassIds = [];
+        if (checkAll && checkAll.checked) {
+          affectedClassIds = ['ALL'];
+        } else {
+          classBoxes.forEach(cb => {
+            if (cb.checked) affectedClassIds.push(cb.value);
+          });
+          if (affectedClassIds.length === 0 || affectedClassIds.length === state.classes.length) {
+            affectedClassIds = ['ALL'];
+          }
+        }
+        const affectedClassId = (affectedClassIds.length === 1 && affectedClassIds[0] !== 'ALL') ? affectedClassIds[0] : null;
 
-        state.data.events.push(newEvent);
+        if (editId) {
+          const existing = state.data.events.find(ev => ev.id === editId);
+          if (existing) {
+            existing.title = title;
+            existing.date = startDate;
+            existing.startDate = startDate;
+            existing.endDate = endDate;
+            existing.type = type;
+            existing.blockAllDay = blockAllDay;
+            existing.blockedPeriod = blockedPeriod;
+            existing.affectedClassIds = affectedClassIds;
+            existing.affectedClassId = affectedClassId;
+          }
+          showToastNotification(`Updated blockout event "${title}"`);
+        } else {
+          const newEvent = {
+            id: `e_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+            title: title,
+            date: startDate,
+            startDate: startDate,
+            endDate: endDate,
+            type: type,
+            blockAllDay: blockAllDay,
+            blockedPeriod: blockedPeriod,
+            affectedClassIds: affectedClassIds,
+            affectedClassId: affectedClassId
+          };
+          state.data.events.push(newEvent);
+          showToastNotification(`Added blockout event "${title}"`);
+        }
+
         state.saveState();
         document.getElementById('modal-event-backdrop')?.classList.remove('active');
         eventForm.reset();
-        refreshAllViews(false, true);
-        showToastNotification(`Added blockout event "${title}"`);
+        refreshAllViews(true, true);
       });
     }
 

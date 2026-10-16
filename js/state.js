@@ -4,12 +4,32 @@
 
 const STORAGE_KEY = 'aus_teacher_timetabler_state_v3';
 
+// Helper to calculate exact school weeks between start and end dates (Mon-Fri)
+function calculateTermWeeks(startDateStr, endDateStr) {
+  if (!startDateStr || !endDateStr) return 10;
+  let start = null, end = null;
+  const p1 = String(startDateStr).split('-').map(Number);
+  if (p1.length === 3 && !isNaN(p1[0])) start = new Date(p1[0], p1[1] - 1, p1[2], 12, 0, 0);
+  const p2 = String(endDateStr).split('-').map(Number);
+  if (p2.length === 3 && !isNaN(p2[0])) end = new Date(p2[0], p2[1] - 1, p2[2], 12, 0, 0);
+  if (!start || !end || end < start) return 10;
+
+  const dayOfWeek = start.getDay();
+  const diffToMon = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+  const monStart = new Date(start);
+  monStart.setDate(monStart.getDate() + diffToMon);
+
+  const diffTime = end.getTime() - monStart.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  return Math.max(1, Math.floor(diffDays / 7) + 1);
+}
+
 // Default Australian School Terms (2026 Sample Default - Configurable)
 const DEFAULT_TERMS = [
   { id: 't1', name: 'Term 1', startDate: '2026-01-28', endDate: '2026-04-02', weeks: 10 },
   { id: 't2', name: 'Term 2', startDate: '2026-04-20', endDate: '2026-07-03', weeks: 11 },
-  { id: 't3', name: 'Term 3', startDate: '2026-07-20', endDate: '2026-09-25', weeks: 10 },
-  { id: 't4', name: 'Term 4', startDate: '2026-10-12', endDate: '2026-12-18', weeks: 10 }
+  { id: 't3', name: 'Term 3', startDate: '2026-07-13', endDate: '2026-09-18', weeks: 10 },
+  { id: 't4', name: 'Term 4', startDate: '2026-10-05', endDate: '2026-12-18', weeks: 11 }
 ];
 
 // Default Configurable Periods with Native Start & End Times (Req 2)
@@ -305,6 +325,9 @@ export class StateStore {
                       t.endDate = t.endDate.replace(/^\d{4}/, yStr);
                       termsMismatch = true;
                     }
+                    if (t.startDate && t.endDate) {
+                      t.weeks = calculateTermWeeks(t.startDate, t.endDate);
+                    }
                   });
                 }
                 // If this year had mismatched terms and classes duplicate dataYear classes from legacy cloning, reset
@@ -323,11 +346,16 @@ export class StateStore {
 
             if (!years[year]) {
               const yrStr = String(year);
-              const newTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS)).map(term => ({
-                ...term,
-                startDate: term.startDate.replace(/^\d{4}/, yrStr),
-                endDate: term.endDate.replace(/^\d{4}/, yrStr)
-              }));
+              const newTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS)).map(term => {
+                const s = term.startDate.replace(/^\d{4}/, yrStr);
+                const e = term.endDate.replace(/^\d{4}/, yrStr);
+                return {
+                  ...term,
+                  startDate: s,
+                  endDate: e,
+                  weeks: calculateTermWeeks(s, e)
+                };
+              });
               years[year] = {
                 terms: newTerms,
                 classes: [],
@@ -341,13 +369,21 @@ export class StateStore {
             }
 
             const curYrData = years[year];
+            const curTerms = curYrData.terms || def.terms;
+            if (Array.isArray(curTerms)) {
+              curTerms.forEach(t => {
+                if (t.startDate && t.endDate) {
+                  t.weeks = calculateTermWeeks(t.startDate, t.endDate);
+                }
+              });
+            }
 
             return {
               ...def,
               ...parsed,
               academicYear: year,
               currentDate: curYrData.currentDate || parsed.currentDate || `${year}-07-22`,
-              terms: curYrData.terms || def.terms,
+              terms: curTerms,
               classes: curYrData.classes || [],
               events: curYrData.events || [],
               timetableSlots: curYrData.timetableSlots || {},
@@ -485,6 +521,9 @@ export class StateStore {
               t.endDate = t.endDate.replace(/^\d{4}/, yStr);
               termsMismatch = true;
             }
+            if (t.startDate && t.endDate) {
+              t.weeks = calculateTermWeeks(t.startDate, t.endDate);
+            }
           });
         }
         if (yNum !== dataYear && termsMismatch && years[dataYear]) {
@@ -502,11 +541,16 @@ export class StateStore {
 
     if (!years[2027]) {
       const yrStr = '2027';
-      const terms2027 = JSON.parse(JSON.stringify(years[dataYear]?.terms || DEFAULT_TERMS)).map(t => ({
-        ...t,
-        startDate: t.startDate ? t.startDate.replace(/^\d{4}/, yrStr) : `${yrStr}-01-28`,
-        endDate: t.endDate ? t.endDate.replace(/^\d{4}/, yrStr) : `${yrStr}-04-02`
-      }));
+      const terms2027 = JSON.parse(JSON.stringify(years[dataYear]?.terms || DEFAULT_TERMS)).map(t => {
+        const s = t.startDate ? t.startDate.replace(/^\d{4}/, yrStr) : `${yrStr}-01-28`;
+        const e = t.endDate ? t.endDate.replace(/^\d{4}/, yrStr) : `${yrStr}-04-02`;
+        return {
+          ...t,
+          startDate: s,
+          endDate: e,
+          weeks: calculateTermWeeks(s, e)
+        };
+      });
       years[2027] = {
         terms: terms2027,
         classes: [],
@@ -622,6 +666,9 @@ export class StateStore {
             term.endDate = term.endDate.replace(/^\d{4}/, yrStr);
             hadWrongYearTerms = true;
           }
+          if (term.startDate && term.endDate) {
+            term.weeks = calculateTermWeeks(term.startDate, term.endDate);
+          }
         });
       }
 
@@ -638,6 +685,13 @@ export class StateStore {
       }
 
       this.data.terms = JSON.parse(JSON.stringify(yrData.terms || []));
+      if (Array.isArray(this.data.terms)) {
+        this.data.terms.forEach(term => {
+          if (term.startDate && term.endDate) {
+            term.weeks = calculateTermWeeks(term.startDate, term.endDate);
+          }
+        });
+      }
       this.data.events = JSON.parse(JSON.stringify(yrData.events || []));
       this.data.classes = JSON.parse(JSON.stringify(yrData.classes || []));
       this.data.timetableSlots = JSON.parse(JSON.stringify(yrData.timetableSlots || {}));
@@ -648,11 +702,16 @@ export class StateStore {
     } else {
       // Brand new year! Initialize empty events, classes, timetable
       const yrStr = String(yr);
-      const newTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS)).map(term => ({
-        ...term,
-        startDate: term.startDate.replace(/^\d{4}/, yrStr),
-        endDate: term.endDate.replace(/^\d{4}/, yrStr)
-      }));
+      const newTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS)).map(term => {
+        const s = term.startDate.replace(/^\d{4}/, yrStr);
+        const e = term.endDate.replace(/^\d{4}/, yrStr);
+        return {
+          ...term,
+          startDate: s,
+          endDate: e,
+          weeks: calculateTermWeeks(s, e)
+        };
+      });
 
       this.data.terms = newTerms;
       this.data.events = [];
