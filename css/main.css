@@ -1987,8 +1987,19 @@ body[data-theme="light"] #homework-summary-markdown-box {
 }
 
 body[data-theme="light"] .homework-summary-rendered-box a,
-body[data-theme="light"] #homework-summary-markdown-box a {
-  color: var(--primary) !important;
+body[data-theme="light"] #homework-summary-markdown-box a,
+body[data-theme="light"] .homework-summary-link,
+body[data-theme="light"] .homework-material-link {
+  color: #0284c7 !important;
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+body[data-theme="light"] .homework-summary-rendered-box a:hover,
+body[data-theme="light"] #homework-summary-markdown-box a:hover,
+body[data-theme="light"] .homework-summary-link:hover,
+body[data-theme="light"] .homework-material-link:hover {
+  color: #0369a1 !important;
 }
 
 body[data-theme="light"] .homework-summary-preview {
@@ -2111,6 +2122,48 @@ body[data-theme="light"] #lesson-sync-linked-group {
 
 body[data-theme="light"] #lesson-sync-linked-label {
   color: var(--primary-text) !important;
+}
+
+/* ==========================================================================
+   Dark Mode High-Contrast Link & Text Styles
+   ========================================================================== */
+[data-theme="dark"] a,
+body[data-theme="dark"] a,
+body[data-theme="dark"] .homework-summary-rendered-box a,
+body[data-theme="dark"] #homework-summary-markdown-box a,
+body[data-theme="dark"] .homework-summary-preview a,
+body[data-theme="dark"] .homework-lesson-card a,
+body[data-theme="dark"] .homework-summary-link,
+body[data-theme="dark"] .homework-material-link,
+body[data-theme="dark"] .wb-link,
+body[data-theme="dark"] .cw-link-icon {
+  color: #38bdf8 !important; /* bright accessible cyan-blue (contrast 9.8:1 against timber background) */
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+[data-theme="dark"] a:hover,
+body[data-theme="dark"] a:hover,
+body[data-theme="dark"] .homework-summary-rendered-box a:hover,
+body[data-theme="dark"] #homework-summary-markdown-box a:hover,
+body[data-theme="dark"] .homework-summary-preview a:hover,
+body[data-theme="dark"] .homework-lesson-card a:hover,
+body[data-theme="dark"] .homework-summary-link:hover,
+body[data-theme="dark"] .homework-material-link:hover,
+body[data-theme="dark"] .wb-link:hover,
+body[data-theme="dark"] .cw-link-icon:hover {
+  color: #7dd3fc !important;
+}
+
+/* Timetable Room & Details Text Contrast (Light & Dark) */
+body[data-theme="light"] .tt-class-details {
+  color: #334155 !important;
+  font-weight: 700 !important;
+}
+
+body[data-theme="dark"] .tt-class-details {
+  color: #cbd5e1 !important;
+  font-weight: 600 !important;
 }
 
 /* ==========================================================================

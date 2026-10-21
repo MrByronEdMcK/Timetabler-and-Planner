@@ -133,15 +133,25 @@
 .tt-class-name {
   font-weight: 700;
   font-size: 0.88rem;
-  color: #ffffff;
+  color: var(--text-main);
   letter-spacing: -0.01em;
 }
 
 /* Class Details / Room displayed in smaller text */
 .tt-class-details {
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.92);
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.2;
+}
+
+body[data-theme="light"] .tt-class-details {
+  color: #334155 !important;
+}
+
+body[data-theme="dark"] .tt-class-details {
+  color: #cbd5e1 !important;
 }
 
 .tt-cell-empty {

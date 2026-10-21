@@ -1769,9 +1769,9 @@
         } else {
           classBadge = classIds.map(cId => {
             const classObj = state.classes.find(c => c.id === cId);
-            return classObj 
-              ? `<span class="tag" style="background:${classObj.color}22; color:${classObj.color}">${classObj.name}</span>`
-              : '';
+            if (!classObj) return '';
+            const cellStyle = getClassCellStyles(classObj.color, state.theme === 'dark');
+            return `<span class="tag" style="background:${cellStyle.tagBg}; color:${cellStyle.tagColor}; border:${cellStyle.tagBorder};">${classObj.name}</span>`;
           }).filter(Boolean).join(' ');
         }
         
@@ -1956,10 +1956,11 @@
 
       state.classes.forEach(c => {
         const checked = isAll || selectedIds.includes(c.id);
+        const cellStyle = getClassCellStyles(c.color, state.theme === 'dark');
         html += `
           <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.85rem; padding:0.15rem 0;">
             <input type="checkbox" class="event-class-checkbox" value="${c.id}" ${checked ? 'checked' : ''}>
-            <span class="tag" style="background:${c.color}22; color:${c.color}; font-weight:700;">● ${c.name}</span>
+            <span class="tag" style="background:${cellStyle.tagBg}; color:${cellStyle.tagColor}; border:${cellStyle.tagBorder}; font-weight:700;"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder}; margin-right:4px; vertical-align:middle;"></span>${c.name}</span>
           </label>
         `;
       });
@@ -2167,12 +2168,13 @@
             const assignedClass = TimetableManager.getClassForSlot(week, dayIdx, period.id);
 
             if (assignedClass) {
-              const detailsHtml = assignedClass.details ? `<div class="tt-class-details">${assignedClass.details}</div>` : '';
-              const textColor = getReadableClassTextColor(assignedClass.color);
+              const isDark = (state.theme === 'dark');
+              const cellStyle = getClassCellStyles(assignedClass.color, isDark);
+              const detailsHtml = assignedClass.details ? `<div class="tt-class-details" style="color:${cellStyle.detailsColor} !important; font-weight:700;">${assignedClass.details}</div>` : '';
               html += `
                 <td class="tt-cell" data-week="${week}" data-day="${dayIdx}" data-period="${period.id}"
-                    style="background:${assignedClass.color}22 !important; border:2px solid ${assignedClass.color} !important; text-align:center; vertical-align:middle; padding:6px 4px;">
-                  <div class="tt-class-name" style="color:${textColor}; font-weight:800; font-size:1.05rem;">${assignedClass.name}</div>
+                    style="background:${cellStyle.bg} !important; border:${cellStyle.border} !important; text-align:center; vertical-align:middle; padding:6px 4px;">
+                  <div class="tt-class-name" style="color:${cellStyle.textColor}; font-weight:800; font-size:1.05rem;">${assignedClass.name}</div>
                   ${detailsHtml}
                 </td>
               `;
@@ -2301,12 +2303,13 @@
         const count = (state.lessonPlans[c.id] || []).length;
         const linkedClasses = state.getLinkedClasses(c.id);
         const linkedBadge = linkedClasses.length > 0 ? `<div style="font-size:0.72rem; color:#38bdf8; font-weight:700; margin-top:2px;">🔗 Linked: ${linkedClasses.map(l => l.name).join(', ')}</div>` : '';
+        const cellStyle = getClassCellStyles(c.color, state.theme === 'dark');
 
         return `
           <div class="class-item-wrapper">
             <button class="class-item-btn ${activeClass}" data-id="${c.id}">
               <div style="display:flex; align-items:center; gap:0.6rem;">
-                <div style="width:12px; height:12px; border-radius:50%; background:${c.color};"></div>
+                <div style="width:12px; height:12px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder}; flex-shrink:0;"></div>
                 <div>
                   <div>${c.name}</div>
                   ${linkedBadge}
@@ -2354,19 +2357,21 @@
 
       const currentLinked = currentClass.linkedClassIds || [];
 
+      const currentStyle = getClassCellStyles(currentClass.color, state.theme === 'dark');
       let html = `
         <div style="font-weight:700; font-size:0.9rem; color:var(--primary); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;">
-          <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${currentClass.color};"></span>
+          <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${currentStyle.dotBg}; border:${currentStyle.dotBorder};"></span>
           <span>Select classes linked with ${currentClass.name}:</span>
         </div>
       `;
 
       otherClasses.forEach(c => {
         const isChecked = currentLinked.includes(c.id);
+        const cellStyle = getClassCellStyles(c.color, state.theme === 'dark');
         html += `
           <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-color); padding:0.75rem 1rem; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:space-between;">
             <div style="display:flex; align-items:center; gap:0.6rem;">
-              <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${c.color};"></span>
+              <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder};"></span>
               <span style="font-weight:700; font-size:0.9rem;">${c.name}</span>
               <span style="font-size:0.75rem; color:var(--text-muted);">(${c.subject || 'General'})</span>
             </div>
@@ -2578,14 +2583,17 @@
         if (otherClasses.length === 0) {
           copyMenuHtml = `<div style="padding:0.4rem 0.75rem; font-size:0.75rem; color:var(--text-dim); font-style:italic;">No other classes created</div>`;
         } else {
-          copyMenuHtml = otherClasses.map(c => `
+          copyMenuHtml = otherClasses.map(c => {
+            const cellStyle = getClassCellStyles(c.color, state.theme === 'dark');
+            return `
             <button type="button" class="copy-unit-target-btn" data-unit="${group.unitName}" data-target-id="${c.id}" 
                     style="width:100%; text-align:left; background:transparent; border:none; padding:0.45rem 0.75rem; font-size:0.78rem; color:var(--text-main); font-weight:600; display:flex; align-items:center; gap:0.5rem; cursor:pointer; border-radius:4px; transition:background 0.15s ease;"
                     onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">
-              <span style="width:10px; height:10px; border-radius:50%; background:${c.color}; flex-shrink:0;"></span>
+              <span style="width:10px; height:10px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder}; flex-shrink:0;"></span>
               <span>${c.name}</span>
             </button>
-          `).join('');
+          `;
+          }).join('');
         }
 
         html += `
@@ -3389,10 +3397,17 @@
         `;
       }
 
+      const modalCellStyle = classObj ? getClassCellStyles(classObj.color, state.theme === 'dark') : null;
+      const classMetaHtml = classObj ? `
+        <div style="color:${modalCellStyle.textColor}; font-weight:700; display:flex; align-items:center; gap:5px;">
+          <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${modalCellStyle.dotBg}; border:${modalCellStyle.dotBorder};"></span>
+          <span>${classObj.name}</span>
+        </div>` : '';
+
       body.innerHTML = `
         <h3 style="font-size:1.2rem; font-weight:800; margin-bottom:0.4rem; color:var(--text-main);">${lesson.title}</h3>
         <div class="lesson-view-meta">
-          <div style="color:${classObj ? classObj.color : '#3b82f6'}; font-weight:700;">● ${classObj ? classObj.name : ''}</div>
+          ${classMetaHtml}
           <div>📂 ${lesson.unit || 'General Curriculum'}</div>
           ${slotMeta}
           <div style="margin-top:0.35rem;">${tagsHtml}</div>
@@ -3641,7 +3656,8 @@
       let classPillsHtml = `<button class="pill-btn ${this.selectedClassIds.includes('ALL') ? 'active' : ''}" data-type="class" data-id="ALL">🌟 All Classes</button>`;
       state.classes.forEach(c => {
         const active = this.selectedClassIds.includes(c.id) ? 'active' : '';
-        classPillsHtml += `<button class="pill-btn ${active}" data-type="class" data-id="${c.id}"><span style="color:${c.color}">●</span> ${c.name}</button>`;
+        const cellStyle = getClassCellStyles(c.color, state.theme === 'dark');
+        classPillsHtml += `<button class="pill-btn ${active}" data-type="class" data-id="${c.id}"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder}; margin-right:4px; vertical-align:middle;"></span>${c.name}</button>`;
       });
 
       const termOptions = state.terms.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
@@ -3944,23 +3960,26 @@
                   const isFloat = lesson && lesson.isFloat;
 
                   const isLight = (state.theme === 'light');
-                  const classTitleColor = isMerged ? (isLight ? '#6d28d9' : '#c4b5fd') : getReadableClassTextColor(classObj.color);
+                  const cellStyle = getClassCellStyles(classObj.color, !isLight);
+                  const classTitleColor = isMerged ? (isLight ? '#6d28d9' : '#c4b5fd') : cellStyle.textColor;
                   const slotBg = isMerged 
                     ? (isLight ? 'rgba(139, 92, 246, 0.12)' : 'rgba(139, 92, 246, 0.25)') 
-                    : (isLight ? `${classObj.color}18` : `${classObj.color}25`);
+                    : cellStyle.bg;
                   const slotBorder = isMerged 
                     ? '1px solid rgba(139, 92, 246, 0.4)' 
-                    : `1px solid ${classObj.color}${isLight ? '45' : '65'}`;
+                    : cellStyle.cardBorder;
+                  const barColor = isMerged ? '#8b5cf6' : cellStyle.accentBar;
 
                   slotsHtml += `
                     <div class="master-slot-item ${isMerged ? 'is-merged' : ''} ${isFloat ? 'is-float' : ''}" 
                          draggable="${lesson ? 'true' : 'false'}" 
-                         style="background:${slotBg} !important; border:${slotBorder} !important; border-left:4px solid ${isMerged ? '#8b5cf6' : classObj.color} !important; cursor:${lesson ? 'grab' : 'default'}; padding:0.55rem; border-radius:var(--radius-sm); margin-bottom:0.4rem;"
+                         style="background:${slotBg} !important; border:${slotBorder} !important; border-left:4px solid ${barColor} !important; cursor:${lesson ? 'grab' : 'default'}; padding:0.55rem; border-radius:var(--radius-sm); margin-bottom:0.4rem;"
                          data-class-id="${classObj.id}" ${lesson ? `data-lesson-id="${lesson.id}"` : ''}
                          data-date="${s.date}" data-period="${s.periodId}">
                       <div style="display:flex; justify-content:space-between; align-items:center; gap:0.35rem; margin-bottom:0.15rem;">
-                        <div style="font-size:0.8rem; color:${classTitleColor}; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                          <span style="color:${classObj.color}; font-size:0.9rem;">●</span> ${classObj.name}
+                        <div style="font-size:0.8rem; color:${classTitleColor}; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:4px;">
+                          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder}; flex-shrink:0;"></span>
+                          <span>${classObj.name}</span>
                         </div>
                         <div style="white-space:nowrap; flex-shrink:0;">
                           ${slotBtnHtml}
@@ -4813,6 +4832,15 @@
           this.selectedWeekNum = Math.max(1, Math.min(TermManager.getTermWeeks(currentTerm), Math.floor(diffDays / 7) + 1));
         }
       }
+
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('testSeed') === '1') {
+          this.selectedTermId = 't1';
+          this.selectedWeekNum = 1;
+          this.selectedClassId = 'c_white';
+        }
+      } catch (e) {}
     },
 
     renderClassSelector() {
@@ -4827,9 +4855,10 @@
 
       state.classes.forEach(c => {
         const active = c.id === this.selectedClassId ? 'active' : '';
+        const cellStyle = getClassCellStyles(c.color, state.theme === 'dark');
         html += `
           <button class="nav-btn ${active}" data-id="${c.id}" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">
-            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${c.color}; margin-right:4px;"></span>
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder}; margin-right:4px;"></span>
             ${c.name}
           </button>
         `;
@@ -5103,7 +5132,7 @@
             else if (typeLower.includes('hand') || typeLower.includes('print')) badgeClass = 'cw-badge-handout';
 
             const workText = cw.work || '(No description)';
-            const contentHtml = cw.link ? `<a href="${cw.link}" target="_blank" style="color:var(--primary); text-decoration:underline;" title="Open material link">${workText}</a>` : workText;
+            const contentHtml = cw.link ? `<a href="${cw.link}" target="_blank" class="homework-material-link" title="Open material link">${workText}</a>` : workText;
 
             return `
               <div style="margin-bottom:0.4rem; font-size:0.88rem;">
@@ -5125,12 +5154,14 @@
           </button>
         ` : '';
 
+        const cellStyle = getClassCellStyles(classObj.color, state.theme === 'dark');
+
         cardsHtml += `
           <div class="homework-lesson-card" data-class="${classObj.id}" data-lesson-id="${lesson.id}" style="cursor:pointer;" title="Click to view/edit lesson plan & classwork">
             <div class="homework-card-header">
               <div>
                 <div style="display:flex; align-items:center; gap:0.5rem;">
-                  <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${classObj.color};"></span>
+                  <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder};"></span>
                   <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">${classObj.name}</span>
                 </div>
                 <div class="homework-lesson-title" style="margin-top:0.25rem;">${idx + 1}. ${lesson.title}</div>
@@ -5542,7 +5573,7 @@
 
         html += '<div style="margin-top: 0.5rem; margin-bottom: 0.25rem; font-weight: 700;">Links:</div>';
         uniqueLinks.forEach(l => {
-          html += `<div style="margin-bottom: 0.2rem;">• ${l.type} (${l.name}): <a href="${l.url}" target="_blank" style="color: var(--primary-light, #0284c7); text-decoration: underline;">${l.url}</a></div>`;
+          html += `<div style="margin-bottom: 0.2rem;">• ${l.type} (${l.name}): <a href="${l.url}" target="_blank" class="homework-summary-link" style="color: #0284c7; text-decoration: underline; font-weight: 500;">${l.url}</a></div>`;
         });
       }
 
@@ -6155,10 +6186,11 @@
               for (let dayIdx = 1; dayIdx <= 5; dayIdx++) {
                 const assignedClass = TimetableManager.getClassForSlot(w, dayIdx, period.id);
                 if (assignedClass) {
-                  const detailsHtml = assignedClass.details ? `<div class="tt-class-details">${assignedClass.details}</div>` : '';
+                  const cellStyle = getClassCellStyles(assignedClass.color, false);
+                  const detailsHtml = assignedClass.details ? `<div class="tt-class-details" style="color:#334155 !important; font-weight:700;">${assignedClass.details}</div>` : '';
                   gridHtml += `
-                    <td class="tt-cell" style="background:${assignedClass.color}22 !important; border:2px solid ${assignedClass.color} !important; text-align:center; vertical-align:middle; padding:6px 4px;">
-                      <div class="tt-class-name">${assignedClass.name}</div>
+                    <td class="tt-cell" style="background:${cellStyle.bg} !important; border:${cellStyle.border} !important; text-align:center; vertical-align:middle; padding:6px 4px;">
+                      <div class="tt-class-name" style="color:${cellStyle.textColor}; font-weight:800;">${assignedClass.name}</div>
                       ${detailsHtml}
                     </td>
                   `;
@@ -6525,28 +6557,132 @@
     });
   }
 
-  function getContrastingTextColor(hexColor) {
-    if (!hexColor) return '#ffffff';
-    let hex = hexColor.replace('#', '');
+  function getColorYIQ(hexColor) {
+    if (!hexColor || typeof hexColor !== 'string') return 128;
+    let hex = hexColor.replace('#', '').trim();
     if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    if (hex.length < 6) return 128;
     const r = parseInt(hex.substring(0, 2), 16) || 0;
     const g = parseInt(hex.substring(2, 4), 16) || 0;
     const b = parseInt(hex.substring(4, 6), 16) || 0;
-    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-    return yiq >= 135 ? '#0f172a' : '#ffffff';
+    return (r * 299 + g * 587 + b * 114) / 1000;
+  }
+
+  function isColorNearWhite(hexColor) {
+    return getColorYIQ(hexColor) >= 215;
+  }
+
+  function isColorNearBlack(hexColor) {
+    return getColorYIQ(hexColor) <= 40;
+  }
+
+  function getClassCellStyles(hexColor, isDark) {
+    const safeColor = hexColor || (isDark ? '#38bdf8' : '#2563eb');
+    const yiq = getColorYIQ(safeColor);
+    const nearWhite = yiq >= 215;
+    const nearBlack = yiq <= 40;
+
+    if (isDark) {
+      if (nearBlack) {
+        return {
+          bg: 'rgba(0, 0, 0, 0.65)',
+          border: '2px solid #94a3b8',
+          cardBorder: '1px solid #94a3b8',
+          accentBar: '#94a3b8',
+          textColor: '#f8fafc',
+          detailsColor: '#cbd5e1',
+          dotBg: '#0f172a',
+          dotBorder: '1.5px solid #94a3b8',
+          tagBg: '#0f172a',
+          tagColor: '#f8fafc',
+          tagBorder: '1px solid #94a3b8'
+        };
+      }
+      if (nearWhite) {
+        return {
+          bg: 'rgba(255, 255, 255, 0.18)',
+          border: '2px solid #ffffff',
+          cardBorder: '1px solid rgba(255, 255, 255, 0.6)',
+          accentBar: '#ffffff',
+          textColor: '#ffffff',
+          detailsColor: '#cbd5e1',
+          dotBg: '#ffffff',
+          dotBorder: '1px solid rgba(255, 255, 255, 0.4)',
+          tagBg: 'rgba(255, 255, 255, 0.15)',
+          tagColor: '#ffffff',
+          tagBorder: '1px solid rgba(255, 255, 255, 0.5)'
+        };
+      }
+      return {
+        bg: `${safeColor}25`,
+        border: `2px solid ${safeColor}`,
+        cardBorder: `1px solid ${safeColor}65`,
+        accentBar: safeColor,
+        textColor: yiq < 140 ? '#ffffff' : safeColor,
+        detailsColor: '#cbd5e1',
+        dotBg: safeColor,
+        dotBorder: '1px solid rgba(255, 255, 255, 0.25)',
+        tagBg: `${safeColor}25`,
+        tagColor: yiq < 140 ? '#ffffff' : safeColor,
+        tagBorder: `1px solid ${safeColor}55`
+      };
+    } else {
+      // Light Mode
+      if (nearWhite) {
+        return {
+          bg: '#ffffff',
+          border: '2px solid #64748b',
+          cardBorder: '1px solid #94a3b8',
+          accentBar: '#64748b',
+          textColor: '#0f172a',
+          detailsColor: '#334155',
+          dotBg: '#ffffff',
+          dotBorder: '1.5px solid #64748b',
+          tagBg: '#f8fafc',
+          tagColor: '#0f172a',
+          tagBorder: '1px solid #94a3b8'
+        };
+      }
+      if (nearBlack) {
+        return {
+          bg: 'rgba(15, 23, 42, 0.08)',
+          border: '2px solid #0f172a',
+          cardBorder: '1px solid #0f172a',
+          accentBar: '#0f172a',
+          textColor: '#0f172a',
+          detailsColor: '#334155',
+          dotBg: '#0f172a',
+          dotBorder: '1px solid rgba(0, 0, 0, 0.3)',
+          tagBg: 'rgba(15, 23, 42, 0.08)',
+          tagColor: '#0f172a',
+          tagBorder: '1px solid #0f172a'
+        };
+      }
+      return {
+        bg: `${safeColor}22`,
+        border: `2px solid ${safeColor}`,
+        cardBorder: `1px solid ${safeColor}45`,
+        accentBar: safeColor,
+        textColor: yiq > 130 ? '#0f172a' : safeColor,
+        detailsColor: '#334155',
+        dotBg: safeColor,
+        dotBorder: '1px solid rgba(0, 0, 0, 0.15)',
+        tagBg: `${safeColor}22`,
+        tagColor: safeColor,
+        tagBorder: `1px solid ${safeColor}44`
+      };
+    }
+  }
+
+  function getContrastingTextColor(hexColor) {
+    if (!hexColor) return '#ffffff';
+    return getColorYIQ(hexColor) >= 135 ? '#0f172a' : '#ffffff';
   }
 
   function getReadableClassTextColor(hexColor) {
     const isLightMode = (state.theme === 'light');
     if (!hexColor) return isLightMode ? '#0f172a' : '#ffffff';
-
-    let hex = hexColor.replace('#', '');
-    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
-    const r = parseInt(hex.substring(0, 2), 16) || 0;
-    const g = parseInt(hex.substring(2, 4), 16) || 0;
-    const b = parseInt(hex.substring(4, 6), 16) || 0;
-    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-
+    const yiq = getColorYIQ(hexColor);
     if (isLightMode) {
       return yiq > 130 ? '#0f172a' : hexColor;
     } else {
@@ -6644,6 +6780,45 @@
   };
 
   document.addEventListener('DOMContentLoaded', () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('testSeed') === '1') {
+        const testClasses = [
+          { id: 'c_white', name: '10SCIE', color: '#ffffff', details: 'B02' },
+          { id: 'c_blue', name: '10MATH', color: '#3b82f6', details: 'S2.3' },
+          { id: 'c_orange', name: '07ENG', color: '#f97316', details: 'B08' }
+        ];
+        state.data.classes = testClasses;
+        state.data.timetableSlots = {
+          '1_1_p1': 'c_white',
+          '1_1_p2': 'c_blue',
+          '1_2_p1': 'c_orange',
+          '1_2_p2': 'c_white',
+          '1_3_p1': 'c_white',
+          '1_4_p1': 'c_blue',
+          '1_5_p1': 'c_white'
+        };
+        state.data.lessonPlans = {
+          'c_white': [
+            {
+              id: 'lp1',
+              title: 'Photosynthesis & Light Absorption',
+              unit: 'Biology',
+              classwork: [
+                { type: 'Textbook', work: 'Pages 104-108 Questions 1-5', link: 'https://classroom.google.com/c/12345/p1' },
+                { type: 'Worksheet', work: 'Chloroplast Diagram Worksheet', link: 'https://docs.google.com/document/d/xyz' }
+              ]
+            }
+          ]
+        };
+        if (state.data.years && state.data.years[state.academicYear]) {
+          state.data.years[state.academicYear].classes = state.data.classes;
+          state.data.years[state.academicYear].timetableSlots = state.data.timetableSlots;
+          state.data.years[state.academicYear].lessonPlans = state.data.lessonPlans;
+        }
+      }
+    } catch (e) {}
+
     ThemeManager.init();
     CalendarUI.init();
     TimetableUI.init();
