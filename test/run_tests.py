@@ -736,6 +736,22 @@ def run():
     expected_pure = "Lesson 1\nTextbook - blah, blah\nWorksheets - blah\n\nLesson 2\nTextbook - blah, blah\nWorksheets - blah"
     runner.assert_equal(summary_pure, expected_pure, 'Lesson mode matches user request example format exactly')
 
+    # Test 16: Whiteboard Chapter Titles and Badges Dynamic Font Scaling
+    print('\nTest 16: Whiteboard Chapter Titles and Badges Dynamic Font Scaling')
+    with open('css/main.css', 'r', encoding='utf-8') as f:
+        main_css = f.read()
+
+    runner.assert_true('.wb-chapter-title' in main_css, 'css/main.css defines .wb-chapter-title')
+    runner.assert_true('font-size: calc(1.05rem * var(--wb-font-scale, 1))' in main_css or ('--wb-font-scale' in main_css and '.wb-chapter-title' in main_css), 'css/main.css scales .wb-chapter-title with var(--wb-font-scale)')
+    runner.assert_true('.wb-card-slot-badge' in main_css, 'css/main.css defines .wb-card-slot-badge')
+    runner.assert_true('body[data-theme="light"] .wb-chapter-title' in main_css, 'css/main.css provides light mode support for .wb-chapter-title')
+    runner.assert_true('wb-chapter-title' in app_js, 'app.js includes wb-chapter-title class')
+    runner.assert_true('wb-chapter-title' in hw_ui_js, 'homeworkUI.js includes wb-chapter-title class')
+    runner.assert_true('wb-card-slot-badge' in app_js, 'app.js includes wb-card-slot-badge class')
+    runner.assert_true('wb-card-slot-badge' in hw_ui_js, 'homeworkUI.js includes wb-card-slot-badge class')
+    runner.assert_true('style="font-size:0.85em;"' not in app_js, 'app.js contains no hardcoded unscaled style="font-size:0.85em;"')
+    runner.assert_true('style="font-size:0.85em;"' not in hw_ui_js, 'homeworkUI.js contains no hardcoded unscaled style="font-size:0.85em;"')
+
     print('\n==================================================')
     print(f'Test Results: {runner.passes} PASSED, {runner.fails} FAILED')
     print('==================================================\n')

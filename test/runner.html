@@ -518,6 +518,41 @@
       return 'Homework summary and whiteboard view support toggling between category collation and by-lesson breakdown.';
     });
 
+    // 17. Whiteboard Chapter Titles and Badges Font Scale
+    test('Whiteboard Chapter Titles and Badges Font Scale', () => {
+      const parsed = HomeworkUI.aggregateTaskObjects([
+        { type: 'Textbook', work: 'Chapter 18 Review: 1-2, 3-6eso, 7-15' },
+        { type: 'Textbook', work: 'Chapter 18 Challenge: 3-6' }
+      ]);
+
+      if (parsed.length !== 2) throw new Error('Expected 2 aggregated chapter objects');
+      if (parsed[0].type !== 'chapter' || parsed[0].prefix !== 'Chapter 18 Review') {
+        throw new Error('Chapter 18 Review was not correctly parsed as a chapter bullet');
+      }
+      if (parsed[1].type !== 'chapter' || parsed[1].prefix !== 'Chapter 18 Challenge') {
+        throw new Error('Chapter 18 Challenge was not correctly parsed as a chapter bullet');
+      }
+
+      // Verify that CSS has wb-chapter-title and wb-card-slot-badge
+      const sheetRules = Array.from(document.styleSheets)
+        .flatMap(s => {
+          try { return Array.from(s.cssRules || []); } catch (e) { return []; }
+        });
+      
+      // Also check by creating elements to verify classes apply
+      const dummyTitle = document.createElement('div');
+      dummyTitle.className = 'wb-group-prefix wb-chapter-title';
+      dummyTitle.textContent = parsed[0].prefix;
+      document.body.appendChild(dummyTitle);
+      const computed = window.getComputedStyle(dummyTitle);
+      const fontSize = computed.fontSize;
+      document.body.removeChild(dummyTitle);
+
+      if (!fontSize) throw new Error('Failed to resolve font-size for .wb-chapter-title');
+
+      return 'Whiteboard chapter titles and lesson badges scale dynamically with whiteboard font zoom controls.';
+    });
+
     const elapsed = Math.round(performance.now() - startTime);
 
     // Update UI

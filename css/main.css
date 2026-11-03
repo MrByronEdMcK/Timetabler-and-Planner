@@ -1452,6 +1452,7 @@ textarea:focus {
   flex: 1;
   overflow-y: auto;
   padding: 1rem 0;
+  font-size: calc(1rem * var(--wb-font-scale, 1));
 }
 
 .whiteboard-footer {
@@ -1521,6 +1522,7 @@ textarea:focus {
   gap: calc(0.35rem * var(--wb-font-scale, 1));
   flex: 1 1 auto;
   min-width: min(100%, 240px);
+  font-size: calc(1rem * var(--wb-font-scale, 1));
 }
 
 .wb-group-prefix {
@@ -1528,6 +1530,24 @@ textarea:focus {
   font-weight: 800;
   color: var(--primary);
   letter-spacing: -0.01em;
+}
+
+.wb-chapter-title {
+  font-size: calc(1.05rem * var(--wb-font-scale, 1));
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.wb-card-slot-badge {
+  font-size: calc(0.82rem * var(--wb-font-scale, 1));
+  font-weight: 600;
+  opacity: 0.85;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.08);
+  padding: calc(0.15rem * var(--wb-font-scale, 1)) calc(0.5rem * var(--wb-font-scale, 1));
+  border-radius: 4px;
 }
 
 .wb-chips-row {
@@ -2073,7 +2093,8 @@ body[data-theme="light"] .whiteboard-bubble-group {
   color: var(--text-main) !important;
 }
 
-body[data-theme="light"] .wb-group-prefix {
+body[data-theme="light"] .wb-group-prefix,
+body[data-theme="light"] .wb-chapter-title {
   color: var(--primary) !important;
 }
 

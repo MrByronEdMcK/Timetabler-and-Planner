@@ -553,7 +553,7 @@ export const HomeworkUI = {
                   }).join('');
                   return `
                     <div class="whiteboard-bubble-group" style="margin-bottom:0.4rem;">
-                      <div class="wb-group-prefix" style="font-size:0.85em;">${bullet.prefix}</div>
+                      <div class="wb-group-prefix wb-chapter-title">${bullet.prefix}</div>
                       <div class="wb-chips-row">${subChips}</div>
                     </div>
                   `;
@@ -622,7 +622,7 @@ export const HomeworkUI = {
                 <span>📖</span>
                 <span>${lessonDisplayTitle}</span>
               </div>
-              <span style="font-size:0.75rem; font-weight:600; opacity:0.85; white-space:nowrap; background:rgba(255,255,255,0.08); padding:0.15rem 0.45rem; border-radius:4px;">
+              <span class="wb-card-slot-badge">
                 ${dayName} ${slot.periodName} (${TermManager.formatDisplayDate(slot.date)})
               </span>
             </div>
@@ -708,7 +708,7 @@ export const HomeworkUI = {
 
             return `
               <div class="whiteboard-bubble-group">
-                <div class="wb-group-prefix">${bullet.prefix}</div>
+                <div class="wb-group-prefix wb-chapter-title">${bullet.prefix}</div>
                 <div class="wb-chips-row">${chipsHtml}</div>
               </div>
             `;
