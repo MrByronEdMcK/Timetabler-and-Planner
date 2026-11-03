@@ -416,11 +416,20 @@ export const HomeworkUI = {
     }
   },
 
-  calculateAutoFontScale(totalItems) {
-    if (totalItems <= 2) return 1.6;
-    if (totalItems <= 4) return 1.35;
-    if (totalItems <= 6) return 1.15;
-    return 1.0;
+  calculateAutoFontScale(totalItems, categoryCount = 1) {
+    const isBubbles = (this.whiteboardLayoutMode !== 'list');
+    if (isBubbles) {
+      if (totalItems <= 4) return 1.6;
+      if (totalItems <= 8) return 1.4;
+      if (totalItems <= 14) return 1.25;
+      if (totalItems <= 20) return 1.1;
+      return 1.0;
+    } else {
+      if (totalItems <= 3) return 1.5;
+      if (totalItems <= 6) return 1.3;
+      if (totalItems <= 10) return 1.15;
+      return 1.0;
+    }
   },
 
   openWhiteboardModal() {
@@ -552,7 +561,7 @@ export const HomeworkUI = {
                     return `<span class="wb-subitem-chip">${it.work}</span>`;
                   }).join('');
                   return `
-                    <div class="whiteboard-bubble-group" style="margin-bottom:0.4rem;">
+                    <div class="whiteboard-bubble-group wb-chapter-bubble">
                       <div class="wb-group-prefix wb-chapter-title">${bullet.prefix}</div>
                       <div class="wb-chips-row">${subChips}</div>
                     </div>
@@ -707,7 +716,7 @@ export const HomeworkUI = {
             }).join('');
 
             return `
-              <div class="whiteboard-bubble-group">
+              <div class="whiteboard-bubble-group wb-chapter-bubble">
                 <div class="wb-group-prefix wb-chapter-title">${bullet.prefix}</div>
                 <div class="wb-chips-row">${chipsHtml}</div>
               </div>

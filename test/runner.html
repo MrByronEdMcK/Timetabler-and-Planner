@@ -553,6 +553,28 @@
       return 'Whiteboard chapter titles and lesson badges scale dynamically with whiteboard font zoom controls.';
     });
 
+    // 18. Content-Adaptive Whiteboard Display Bubbles & Spacing
+    test('Content-Adaptive Whiteboard Display Bubbles & Spacing', () => {
+      const dummyGroup = document.createElement('div');
+      dummyGroup.className = 'whiteboard-bubble-group wb-chapter-bubble';
+      dummyGroup.innerHTML = '<div class="wb-group-prefix wb-chapter-title">Ch 18</div><div class="wb-chips-row"><span class="wb-subitem-chip">1-2</span></div>';
+      document.body.appendChild(dummyGroup);
+      const computed = window.getComputedStyle(dummyGroup);
+      const maxWidth = computed.maxWidth;
+      document.body.removeChild(dummyGroup);
+
+      if (!maxWidth) throw new Error('Failed to compute style on .wb-chapter-bubble');
+
+      // Test auto-scale generosity with adaptive bubbles
+      const auto4 = HomeworkUI.calculateAutoFontScale(4);
+      if (auto4 < 1.5) throw new Error(`Expected scale >= 1.5 for 4 items, got ${auto4}`);
+
+      const auto8 = HomeworkUI.calculateAutoFontScale(8);
+      if (auto8 < 1.35) throw new Error(`Expected scale >= 1.35 for 8 items, got ${auto8}`);
+
+      return 'Whiteboard display bubbles size adaptively to content and maintain large legible text sizes.';
+    });
+
     const elapsed = Math.round(performance.now() - startTime);
 
     // Update UI

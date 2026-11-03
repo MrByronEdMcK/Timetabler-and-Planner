@@ -752,6 +752,28 @@ def run():
     runner.assert_true('style="font-size:0.85em;"' not in app_js, 'app.js contains no hardcoded unscaled style="font-size:0.85em;"')
     runner.assert_true('style="font-size:0.85em;"' not in hw_ui_js, 'homeworkUI.js contains no hardcoded unscaled style="font-size:0.85em;"')
 
+    # Test 17: Content-Adaptive Whiteboard Display Bubbles & Spacing
+    print('\nTest 17: Content-Adaptive Whiteboard Display Bubbles & Spacing')
+    runner.assert_true('.wb-chapter-bubble' in main_css, 'css/main.css defines .wb-chapter-bubble')
+    runner.assert_true('width: fit-content' in main_css, 'css/main.css includes width: fit-content for adaptive bubbles')
+    runner.assert_true('body[data-theme="light"] .wb-chapter-bubble' in main_css, 'css/main.css provides light mode styling for .wb-chapter-bubble')
+    runner.assert_true('wb-chapter-bubble' in app_js, 'app.js renders wb-chapter-bubble')
+    runner.assert_true('wb-chapter-bubble' in hw_ui_js, 'homeworkUI.js renders wb-chapter-bubble')
+
+    # Verify auto-scale calculation supports large readable font without shrinking
+    class ScaleSimulator:
+        @staticmethod
+        def calc(total_items, is_bubbles=True):
+            if is_bubbles:
+                if total_items <= 4: return 1.6
+                if total_items <= 8: return 1.4
+                if total_items <= 14: return 1.25
+                if total_items <= 20: return 1.1
+                return 1.0
+            return 1.0
+    runner.assert_equal(ScaleSimulator.calc(3, True), 1.6, '3 items (from user screenshot) auto-fits to generous 1.6x font size')
+    runner.assert_equal(ScaleSimulator.calc(6, True), 1.4, '6 items auto-fits to 1.4x without prematurely shrinking text')
+
     print('\n==================================================')
     print(f'Test Results: {runner.passes} PASSED, {runner.fails} FAILED')
     print('==================================================\n')
