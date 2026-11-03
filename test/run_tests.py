@@ -757,6 +757,7 @@ def run():
     runner.assert_true('.wb-chapter-bubble' in main_css, 'css/main.css defines .wb-chapter-bubble')
     runner.assert_true('width: fit-content' in main_css, 'css/main.css includes width: fit-content for adaptive bubbles')
     runner.assert_true('body[data-theme="light"] .wb-chapter-bubble' in main_css, 'css/main.css provides light mode styling for .wb-chapter-bubble')
+    runner.assert_true('display: flex' in main_css and 'flex-wrap: wrap' in main_css, 'css/main.css configures flex-wrap for adaptive whiteboard tiles')
     runner.assert_true('wb-chapter-bubble' in app_js, 'app.js renders wb-chapter-bubble')
     runner.assert_true('wb-chapter-bubble' in hw_ui_js, 'homeworkUI.js renders wb-chapter-bubble')
 

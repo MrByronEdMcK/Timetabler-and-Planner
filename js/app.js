@@ -5399,7 +5399,7 @@
 
           wbHtml += `
             <div class="whiteboard-card">
-              <div class="whiteboard-type-header" style="justify-content:space-between; align-items:flex-start;">
+              <div class="whiteboard-type-header">
                 <div style="display:flex; align-items:center; gap:0.5rem;">
                   <span>📖</span>
                   <span>${lessonDisplayTitle}</span>
@@ -5548,8 +5548,10 @@
         wbHtml += `
           <div class="whiteboard-card">
             <div class="whiteboard-type-header">
-              <span>${icon}</span>
-              <span>${typeKey}</span>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <span>${icon}</span>
+                <span>${typeKey}</span>
+              </div>
             </div>
             ${itemsContentHtml}
           </div>
