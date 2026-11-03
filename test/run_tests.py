@@ -760,6 +760,10 @@ def run():
     runner.assert_true('display: flex' in main_css and 'flex-wrap: wrap' in main_css, 'css/main.css configures flex-wrap for adaptive whiteboard tiles')
     runner.assert_true('wb-chapter-bubble' in app_js, 'app.js renders wb-chapter-bubble')
     runner.assert_true('wb-chapter-bubble' in hw_ui_js, 'homeworkUI.js renders wb-chapter-bubble')
+    runner.assert_true('lessonDisplayTitle = `Lesson ${idx + 1}`' in app_js, 'app.js uses clean Lesson number without appended titles in whiteboard view')
+    runner.assert_true('lessonDisplayTitle = `Lesson ${idx + 1}`' in hw_ui_js, 'homeworkUI.js uses clean Lesson number without appended titles in whiteboard view')
+    runner.assert_true('${dayName} ${slot.periodName}\n' in app_js or '${dayName} ${slot.periodName}</span>' in app_js or '${dayName} ${slot.periodName}\r\n' in app_js, 'app.js displays only day and period badge without dates in whiteboard')
+    runner.assert_true('${dayName} ${slot.periodName}\n' in hw_ui_js or '${dayName} ${slot.periodName}</span>' in hw_ui_js or '${dayName} ${slot.periodName}\r\n' in hw_ui_js, 'homeworkUI.js displays only day and period badge without dates in whiteboard')
 
     # Verify auto-scale calculation supports large readable font without shrinking
     class ScaleSimulator:

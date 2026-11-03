@@ -5295,10 +5295,7 @@
 
           const days = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
           const dayName = days[slot.dayOfWeek] || '';
-          const cleanTitle = (lesson.title && lesson.title.trim().toLowerCase() !== `lesson ${idx + 1}`)
-            ? lesson.title.replace(/^Lesson\s*\d+\s*[-:]?\s*/i, '').replace(/^\d+[\.\:\-\s]+/, '').trim()
-            : '';
-          const lessonDisplayTitle = cleanTitle ? `Lesson ${idx + 1}: ${cleanTitle}` : `Lesson ${idx + 1}`;
+          const lessonDisplayTitle = `Lesson ${idx + 1}`;
 
           const lessonGrouped = {};
           classworkItems.forEach(item => {
@@ -5400,12 +5397,12 @@
           wbHtml += `
             <div class="whiteboard-card">
               <div class="whiteboard-type-header">
-                <div style="display:flex; align-items:center; gap:0.5rem;">
+                <div style="display:flex; align-items:center; gap:0.5rem;" title="${lesson.title ? lesson.title.trim() : lessonDisplayTitle}">
                   <span>📖</span>
                   <span>${lessonDisplayTitle}</span>
                 </div>
-                <span class="wb-card-slot-badge">
-                  ${dayName} ${slot.periodName} (${TermManager.formatDisplayDate(slot.date)})
+                <span class="wb-card-slot-badge" title="${TermManager.formatDisplayDate(slot.date)}">
+                  ${dayName} ${slot.periodName}
                 </span>
               </div>
               ${cardBodyHtml}
