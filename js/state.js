@@ -413,6 +413,7 @@ export class StateStore {
     return {
       tutorialCompleted: false,
       timeFormat: '12h',
+      homeworkGroupingMode: 'category',
       currentDate: '2026-07-22',
       academicYear: defaultYear,
       timetableCycleWeeks: 2,
@@ -735,6 +736,12 @@ export class StateStore {
   get timetableCycleWeeks() { return this.data.timetableCycleWeeks || 2; }
   get currentDate() { return this.data.currentDate || '2026-07-22'; }
   get timeFormat() { return this.data.timeFormat || '12h'; }
+  get homeworkGroupingMode() { return this.data.homeworkGroupingMode || 'category'; }
+
+  setHomeworkGroupingMode(mode) {
+    this.data.homeworkGroupingMode = (mode === 'lesson') ? 'lesson' : 'category';
+    this.saveState();
+  }
 
   setCurrentDate(dateStr) {
     this.data.currentDate = dateStr;

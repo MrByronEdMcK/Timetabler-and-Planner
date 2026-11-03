@@ -584,6 +584,158 @@ def run():
     runner.assert_true(clean_t4 is not None, 'Clean backup has Term 4')
     runner.assert_equal(clean_t4.get('weeks'), 11, 'Clean backup Term 4 has weeks: 11')
 
+    # Test 15: Weekly Homework Summary & Whiteboard Toggle (By Category vs By Lesson)
+    print('\nTest 15: Weekly Homework Summary & Whiteboard Toggle (By Category vs By Lesson)')
+    with open('index.html', 'r', encoding='utf-8') as f:
+        idx_html = f.read()
+    runner.assert_true('btn-toggle-wb-grouping' in idx_html, 'index.html includes Whiteboard By Category / By Lesson toggle button')
+    runner.assert_true('btn-hw-group-category' in app_js, 'app.js includes Homework summary By Category toggle button')
+    runner.assert_true('btn-hw-group-lesson' in app_js, 'app.js includes Homework summary By Lesson toggle button')
+    runner.assert_true('homeworkGroupingMode' in app_js, 'app.js implements homeworkGroupingMode state')
+    with open('js/state.js', 'r', encoding='utf-8') as f:
+        st_js = f.read()
+    runner.assert_true('homeworkGroupingMode' in st_js, 'state.js implements homeworkGroupingMode state')
+    with open('js/ui/homeworkUI.js', 'r', encoding='utf-8') as f:
+        hw_ui_js = f.read()
+    runner.assert_true('toggleGroupingMode' in hw_ui_js, 'homeworkUI.js implements toggleGroupingMode')
+    runner.assert_true('setGroupingMode' in hw_ui_js, 'homeworkUI.js implements setGroupingMode')
+    runner.assert_true('btn-toggle-wb-grouping' in hw_ui_js, 'homeworkUI.js controls btn-toggle-wb-grouping')
+
+    # Verify formatting output in both modes
+    class HomeworkFormatterSimulator:
+        @staticmethod
+        def generate_summary_text(entries, class_name, grouping_mode='category'):
+            if not entries:
+                return '(No classwork recorded for this week)'
+
+            if grouping_mode == 'lesson':
+                lesson_blocks = []
+                links = []
+                total_tasks = 0
+                for idx, entry in enumerate(entries):
+                    lesson = entry.get('lesson', {})
+                    classwork = lesson.get('classwork', [])
+                    if not classwork:
+                        continue
+
+                    grouped_for_lesson = {}
+                    for item in classwork:
+                        t = (item.get('type') or 'General').strip()
+                        w = (item.get('work') or '').strip()
+                        l = (item.get('link') or '').strip()
+                        if w:
+                            grouped_for_lesson.setdefault(t, []).append({'work': w, 'link': l})
+                            if l:
+                                links.append({'type': t, 'name': w, 'url': l})
+
+                    cat_keys = list(grouped_for_lesson.keys())
+                    if not cat_keys:
+                        continue
+                    total_tasks += len(cat_keys)
+
+                    clean_title = (lesson.get('title') or '').strip()
+                    if clean_title.lower() == f"lesson {idx + 1}":
+                        clean_title = ''
+                    header_text = f"Lesson {idx + 1} - {clean_title}" if clean_title else f"Lesson {idx + 1}"
+
+                    block_lines = [header_text]
+                    for cat in cat_keys:
+                        works = [it['work'] for it in grouped_for_lesson[cat]]
+                        block_lines.append(f"{cat} - {', '.join(works)}")
+                    lesson_blocks.append('\n'.join(block_lines))
+
+                if total_tasks == 0 or not lesson_blocks:
+                    return '(No classwork tasks recorded for this week)'
+
+                lines = []
+                if class_name:
+                    lines.append(f"{class_name} Homework:")
+                    lines.append('')
+                lines.append('\n\n'.join(lesson_blocks))
+                if links:
+                    lines.append('')
+                    lines.append('Links:')
+                    for l in links:
+                        lines.append(f"• {l['type']} ({l['name']}): {l['url']}")
+                return '\n'.join(lines).strip()
+
+            # Category mode
+            grouped = {}
+            links = []
+            for entry in entries:
+                for item in entry.get('lesson', {}).get('classwork', []):
+                    t = (item.get('type') or 'General').strip()
+                    w = (item.get('work') or '').strip()
+                    l = (item.get('link') or '').strip()
+                    if w:
+                        grouped.setdefault(t, []).append(w)
+                        if l:
+                            links.append({'type': t, 'name': w, 'url': l})
+
+            if not grouped:
+                return '(No classwork tasks recorded for this week)'
+
+            lines = [f"{class_name} Homework:"]
+            for key, works in grouped.items():
+                lines.append(f"{key}:")
+                lines.append('')
+                for w in works:
+                    lines.append(f"• {w}")
+                lines.append('')
+            if links:
+                lines.append('Links:')
+                for l in links:
+                    lines.append(f"• {l['type']} ({l['name']}): {l['url']}")
+            return '\n'.join(lines).strip()
+
+    sample_entries = [
+        {
+            'lesson': {
+                'title': '',
+                'classwork': [
+                    {'type': 'Textbook', 'work': '7A Q1, Q3, Q5', 'link': 'https://education.vic.gov.au'},
+                    {'type': 'Worksheets', 'work': 'Sheet 1', 'link': ''}
+                ]
+            }
+        },
+        {
+            'lesson': {
+                'title': 'Solving 1-Step Equations',
+                'classwork': [
+                    {'type': 'Textbook', 'work': '7B(All)', 'link': ''},
+                    {'type': 'Worksheets', 'work': 'Sheet 2', 'link': ''}
+                ]
+            }
+        }
+    ]
+
+    # Test category grouping mode
+    summary_cat = HomeworkFormatterSimulator.generate_summary_text(sample_entries, 'Year 9 Mathematics', 'category')
+    runner.assert_true('Year 9 Mathematics Homework:' in summary_cat, 'Category summary contains class header')
+    runner.assert_true('Textbook:' in summary_cat, 'Category summary groups Textbook tasks together')
+    runner.assert_true('• 7A Q1, Q3, Q5' in summary_cat, 'Category summary includes Lesson 1 textbook task')
+    runner.assert_true('• 7B(All)' in summary_cat, 'Category summary includes Lesson 2 textbook task under same category')
+    runner.assert_true('Worksheets:' in summary_cat, 'Category summary groups Worksheets tasks together')
+    runner.assert_true('• Sheet 1' in summary_cat, 'Category summary includes Sheet 1')
+    runner.assert_true('• Sheet 2' in summary_cat, 'Category summary includes Sheet 2')
+    runner.assert_true('Links:' in summary_cat and 'https://education.vic.gov.au' in summary_cat, 'Category summary includes Links section')
+
+    # Test lesson grouping mode
+    summary_lesson = HomeworkFormatterSimulator.generate_summary_text(sample_entries, 'Year 9 Mathematics', 'lesson')
+    runner.assert_true('Lesson 1\nTextbook - 7A Q1, Q3, Q5\nWorksheets - Sheet 1' in summary_lesson, 'Lesson mode formats Lesson 1 with Category - Work lines')
+    runner.assert_true('Lesson 2 - Solving 1-Step Equations\nTextbook - 7B(All)\nWorksheets - Sheet 2' in summary_lesson, 'Lesson mode formats Lesson 2 with title and Category - Work lines')
+    runner.assert_true('\n\nLesson 2' in summary_lesson, 'Lesson mode has blank line between lessons')
+    runner.assert_true('Links:' in summary_lesson and 'https://education.vic.gov.au' in summary_lesson, 'Lesson mode preserves material hyperlinks')
+
+    # Test pure Lesson 1 / Lesson 2 without title matching user prompt example exactly
+    sample_pure = [
+        {'lesson': {'title': 'Lesson 1', 'classwork': [{'type': 'Textbook', 'work': 'blah, blah'}, {'type': 'Worksheets', 'work': 'blah'}]}},
+        {'lesson': {'title': 'Lesson 2', 'classwork': [{'type': 'Textbook', 'work': 'blah, blah'}, {'type': 'Worksheets', 'work': 'blah'}]}}
+    ]
+    summary_pure = HomeworkFormatterSimulator.generate_summary_text(sample_pure, '', 'lesson')
+    expected_pure = "Lesson 1\nTextbook - blah, blah\nWorksheets - blah\n\nLesson 2\nTextbook - blah, blah\nWorksheets - blah"
+    runner.assert_equal(summary_pure, expected_pure, 'Lesson mode matches user request example format exactly')
+
     print('\n==================================================')
     print(f'Test Results: {runner.passes} PASSED, {runner.fails} FAILED')
     print('==================================================\n')

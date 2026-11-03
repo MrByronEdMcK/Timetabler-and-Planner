@@ -167,6 +167,7 @@
   import { TermManager } from '../js/termManager.js';
   import { TimetableManager } from '../js/timetableManager.js';
   import { Scheduler } from '../js/scheduler.js';
+  import { HomeworkUI } from '../js/ui/homeworkUI.js';
 
   window.runTests = function() {
     const startTime = performance.now();
@@ -449,6 +450,72 @@
       if (t4_test.weeks !== 11) throw new Error(`Expected term.weeks to be mutated to 11, got ${t4_test.weeks}`);
 
       return 'Term 4 duration is dynamically calculated as 11 weeks and updates master calendar span through 18 Dec 2026.';
+    });
+
+    // 16. Weekly Homework Summary & Whiteboard Toggle (By Category vs By Lesson)
+    test('Weekly Homework Summary & Whiteboard Toggle (By Category vs By Lesson)', () => {
+      if (typeof HomeworkUI.toggleGroupingMode !== 'function') throw new Error('HomeworkUI.toggleGroupingMode is not defined');
+      if (typeof HomeworkUI.setGroupingMode !== 'function') throw new Error('HomeworkUI.setGroupingMode is not defined');
+
+      HomeworkUI.setGroupingMode('category');
+      if (state.homeworkGroupingMode !== 'category' || HomeworkUI.groupingMode !== 'category') {
+        throw new Error('Failed to set category grouping mode');
+      }
+
+      const mockEntries = [
+        {
+          lesson: {
+            title: 'Lesson 1',
+            classwork: [
+              { type: 'Textbook', work: '7A Q1, Q3, Q5', link: 'https://education.vic.gov.au' },
+              { type: 'Worksheets', work: 'Sheet 1', link: '' }
+            ]
+          }
+        },
+        {
+          lesson: {
+            title: 'Solving 1-Step Equations',
+            classwork: [
+              { type: 'Textbook', work: '7B(All)', link: '' },
+              { type: 'Worksheets', work: 'Sheet 2', link: '' }
+            ]
+          }
+        }
+      ];
+
+      // Test Category summary
+      const catText = HomeworkUI.generateSummaryText(mockEntries, 'category');
+      if (!catText.includes('Textbook:')) throw new Error('Category summary missing Textbook: header');
+      if (!catText.includes('Worksheets:')) throw new Error('Category summary missing Worksheets: header');
+      if (!catText.includes('https://education.vic.gov.au')) throw new Error('Category summary missing material link');
+
+      // Test Lesson summary
+      const lessonText = HomeworkUI.generateSummaryText(mockEntries, 'lesson');
+      if (!lessonText.includes('Lesson 1\nTextbook - 7A Q1, Q3, Q5\nWorksheets - Sheet 1')) {
+        throw new Error(`Lesson mode does not match Lesson 1 format: ${lessonText}`);
+      }
+      if (!lessonText.includes('Lesson 2 - Solving 1-Step Equations\nTextbook - 7B(All)\nWorksheets - Sheet 2')) {
+        throw new Error(`Lesson mode does not match Lesson 2 format: ${lessonText}`);
+      }
+
+      // Test exact user request example
+      const pureEntries = [
+        { lesson: { title: 'Lesson 1', classwork: [{ type: 'Textbook', work: 'blah, blah' }, { type: 'Worksheets', work: 'blah' }] } },
+        { lesson: { title: 'Lesson 2', classwork: [{ type: 'Textbook', work: 'blah, blah' }, { type: 'Worksheets', work: 'blah' }] } }
+      ];
+      const pureText = HomeworkUI.generateSummaryText(pureEntries, 'lesson');
+      const expectedPure = "Lesson 1\nTextbook - blah, blah\nWorksheets - blah\n\nLesson 2\nTextbook - blah, blah\nWorksheets - blah";
+      if (!pureText.includes(expectedPure)) {
+        throw new Error(`Pure text does not contain expected exact format:\n${pureText}`);
+      }
+
+      // Toggle grouping mode
+      HomeworkUI.toggleGroupingMode();
+      if (HomeworkUI.groupingMode !== 'lesson') throw new Error('toggleGroupingMode failed to toggle to lesson');
+      HomeworkUI.toggleGroupingMode();
+      if (HomeworkUI.groupingMode !== 'category') throw new Error('toggleGroupingMode failed to toggle back to category');
+
+      return 'Homework summary and whiteboard view support toggling between category collation and by-lesson breakdown.';
     });
 
     const elapsed = Math.round(performance.now() - startTime);
