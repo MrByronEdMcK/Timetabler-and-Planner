@@ -189,7 +189,7 @@ export const MasterScheduleUI = {
 
     this.ensureRangeDefaults();
 
-    let classPillsHtml = `<button class="pill-btn ${this.selectedClassIds.includes('ALL') ? 'active' : ''}" data-type="class" data-id="ALL">🌟 All Classes</button>`;
+    let classPillsHtml = `<button class="pill-btn ${this.selectedClassIds.includes('ALL') ? 'active' : ''}" data-type="class" data-id="ALL">All Classes</button>`;
     state.classes.forEach(c => {
       const active = this.selectedClassIds.includes(c.id) ? 'active' : '';
       classPillsHtml += `<button class="pill-btn ${active}" data-type="class" data-id="${c.id}"><span style="color:${c.color}">●</span> ${c.name}</button>`;
@@ -210,13 +210,13 @@ export const MasterScheduleUI = {
 
           <!-- View Mode Slider Switch (Show Current Week vs Date Range) -->
           <div class="master-mode-switch-wrapper" style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem 0.6rem; border-radius:30px; border:1px solid var(--border-color);">
-            <button type="button" class="btn btn-xs ${isCurrentWeekMode ? 'btn-primary' : 'btn-secondary'}" id="btn-master-mode-week" style="border-radius:20px; font-size:0.75rem; font-weight:700;">📍 Show Current Week</button>
-            <button type="button" class="btn btn-xs ${!isCurrentWeekMode ? 'btn-primary' : 'btn-secondary'}" id="btn-master-mode-range" style="border-radius:20px; font-size:0.75rem; font-weight:700;">🗓️ Date Range</button>
+            <button type="button" class="btn btn-xs ${isCurrentWeekMode ? 'btn-primary' : 'btn-secondary'}" id="btn-master-mode-week" style="border-radius:20px; font-size:0.75rem; font-weight:700;">Current Week</button>
+            <button type="button" class="btn btn-xs ${!isCurrentWeekMode ? 'btn-primary' : 'btn-secondary'}" id="btn-master-mode-range" style="border-radius:20px; font-size:0.75rem; font-weight:700;">Date Range</button>
           </div>
         </div>
 
         <div class="nav-row master-range-bar" style="padding:0.6rem 0.85rem; border-radius:var(--radius-md); border:1px solid var(--border-color); display:flex; align-items:center; gap:1rem; flex-wrap:wrap; opacity:${isCurrentWeekMode ? 0.6 : 1};">
-          <span style="font-weight:700; font-size:0.85rem; color:var(--primary-light);">🗓️ Term & Week Range:</span>
+          <span style="font-weight:700; font-size:0.85rem; color:var(--primary-light);">Term & Week Range:</span>
           
           <div style="display:flex; align-items:center; gap:0.4rem;">
             <span style="font-size:0.8rem; color:var(--text-muted); font-weight:600;">From:</span>
@@ -231,7 +231,7 @@ export const MasterScheduleUI = {
           </div>
 
           <div style="font-size:0.8rem; font-weight:700; color:var(--accent-teal); margin-left:auto;">
-            ${isCurrentWeekMode ? `📍 Showing Current Week (${TermManager.formatDisplayDate(state.currentDate)})` : `📅 Showing ${activeRange.length} ${activeRange.length === 1 ? 'Week' : 'Weeks'} Inclusive`}
+            ${isCurrentWeekMode ? `Showing Current Week (${TermManager.formatDisplayDate(state.currentDate)})` : `Showing ${activeRange.length} ${activeRange.length === 1 ? 'Week' : 'Weeks'} Inclusive`}
           </div>
         </div>
       </div>

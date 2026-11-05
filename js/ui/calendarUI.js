@@ -21,8 +21,7 @@ export const CalendarUI = {
           <div style="display:flex; align-items:center; gap:0.75rem;">
             <span style="font-size:1.3rem;">🎓</span>
             <div>
-              <div style="font-weight:700; font-size:0.9rem; color:var(--text-main);">Academic School Year</div>
-              <div style="font-size:0.78rem; color:var(--text-muted);">Switching years displays that year's terms, timetable, classes, and blockout events.</div>
+              <div style="font-weight:700; font-size:0.95rem; color:var(--text-main);">Academic School Year</div>
             </div>
           </div>
           <div style="display:flex; align-items:center; gap:0.5rem;">

@@ -872,8 +872,8 @@
       if (!trimmed) return null;
       let existing = this.classes.find(c => c.name.toLowerCase() === trimmed.toLowerCase());
       if (existing) {
-        if (!existing.details && details) existing.details = details;
-        if (!existing.color && color) existing.color = color;
+        if (details) existing.details = details;
+        if (color) existing.color = color;
         this.saveState();
         return existing;
       }
@@ -1007,6 +1007,10 @@
   }
 
   const state = new StateStore();
+  if (typeof window !== 'undefined') {
+    window.state = state;
+    window.PersistentStorageManager = PersistentStorageManager;
+  }
 
   // Helper for 12h / 24h Time Inputs (Req 2)
   function formatSingleTime(timeStr) {
@@ -1156,6 +1160,9 @@
       });
     }
   };
+  if (typeof window !== 'undefined') {
+    window.TermManager = TermManager;
+  }
 
   const TimetableManager = {
     getWeekCycleNumber(dateStr) {
@@ -1216,6 +1223,9 @@
       state.saveState();
     }
   };
+  if (typeof window !== 'undefined') {
+    window.TimetableManager = TimetableManager;
+  }
 
   const Scheduler = {
     reanalysisStats: {
@@ -1706,6 +1716,9 @@
       return true;
     }
   };
+  if (typeof window !== 'undefined') {
+    window.Scheduler = Scheduler;
+  }
 
   // UI Modules
   const CalendarUI = {
@@ -1724,8 +1737,7 @@
             <div style="display:flex; align-items:center; gap:0.75rem;">
               <span style="font-size:1.3rem;">🎓</span>
               <div>
-                <div style="font-weight:700; font-size:0.9rem; color:var(--text-main);">Academic School Year</div>
-                <div style="font-size:0.78rem; color:var(--text-muted);">Switching years displays that year's terms, timetable, classes, and blockout events.</div>
+                <div style="font-weight:700; font-size:0.95rem; color:var(--text-main);">Academic School Year</div>
               </div>
             </div>
             <div style="display:flex; align-items:center; gap:0.5rem;">
@@ -2608,7 +2620,7 @@
             <div class="topic-group-header ${isCollapsed ? 'collapsed' : ''}" data-topic-key="${topicKey}">
               <div class="topic-group-title">
                 <span class="topic-toggle-icon">${isCollapsed ? '▶' : '▼'}</span>
-                <span>📂 ${group.unitName}</span>
+                <span>${group.unitName}</span>
                 <span class="topic-count-badge">${count} ${count === 1 ? 'Lesson' : 'Lessons'} (${numLabel})</span>
               </div>
               <div style="display:flex; align-items:center; gap:0.5rem;">
@@ -2650,15 +2662,12 @@
                 <div class="lesson-num">${originalIndex + 1}</div>
                 <div class="lesson-details">
                   <div class="lesson-title">${lesson.title}</div>
-                  <div class="lesson-unit">📂 ${lesson.unit || 'General Curriculum'} ${tagsHtml}</div>
+                  <div class="lesson-unit">${lesson.unit || 'General Curriculum'} ${tagsHtml}</div>
                 </div>
               </div>
               <div class="lesson-actions">
                 <button class="btn btn-secondary btn-sm view-lesson-btn" data-id="${lesson.id}" title="View lesson details and copy notes">👁️ View</button>
-                <button class="btn btn-secondary btn-sm edit-lesson-btn" data-id="${lesson.id}" title="Edit lesson plan">✏️ Edit</button>
-                <button class="btn btn-secondary btn-sm toggle-pin-btn" data-id="${lesson.id}" title="Pin to date or unpin">
-                  ${lesson.isPinned ? '📌 Unpin' : '📌 Pin'}
-                </button>
+                <button class="btn btn-secondary btn-sm edit-lesson-btn" data-id="${lesson.id}" title="Edit lesson plan">✏️</button>
                 <button class="btn btn-secondary btn-sm duplicate-lesson-btn" data-id="${lesson.id}" title="Duplicate this lesson plan">📄 Duplicate</button>
                 <button class="btn btn-secondary btn-sm toggle-float-btn" data-id="${lesson.id}" title="Float lessons are pruned FIRST during pacing conflicts">
                   ${isFloat ? 'Remove Float Tag' : '🎈 Tag Float'}
@@ -3254,7 +3263,7 @@
       });
 
       document.addEventListener('click', (e) => {
-        const pinEl = e.target.closest('.toggle-pin-btn, .tag-pinned');
+        const pinEl = e.target.closest('.tag-pinned');
         if (pinEl) {
           e.preventDefault();
           e.stopPropagation();
@@ -3415,7 +3424,7 @@
         <h3 style="font-size:1.2rem; font-weight:800; margin-bottom:0.4rem; color:var(--text-main);">${lesson.title}</h3>
         <div class="lesson-view-meta">
           ${classMetaHtml}
-          <div>📂 ${lesson.unit || 'General Curriculum'}</div>
+          <div>${lesson.unit || 'General Curriculum'}</div>
           ${slotMeta}
           <div style="margin-top:0.35rem;">${tagsHtml}</div>
         </div>
@@ -3660,7 +3669,7 @@
 
       this.ensureRangeDefaults();
 
-      let classPillsHtml = `<button class="pill-btn ${this.selectedClassIds.includes('ALL') ? 'active' : ''}" data-type="class" data-id="ALL">🌟 All Classes</button>`;
+      let classPillsHtml = `<button class="pill-btn ${this.selectedClassIds.includes('ALL') ? 'active' : ''}" data-type="class" data-id="ALL">All Classes</button>`;
       state.classes.forEach(c => {
         const active = this.selectedClassIds.includes(c.id) ? 'active' : '';
         const cellStyle = getClassCellStyles(c.color, state.theme === 'dark');
@@ -3682,13 +3691,13 @@
 
             <!-- View Mode Slider Switch (Show Current Week vs Date Range) -->
             <div class="master-mode-switch-wrapper" style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem 0.6rem; border-radius:30px; border:1px solid var(--border-color);">
-              <button type="button" class="btn btn-xs ${isCurrentWeekMode ? 'btn-primary' : 'btn-secondary'}" id="btn-master-mode-week" style="border-radius:20px; font-size:0.75rem; font-weight:700;">📍 Show Current Week</button>
-              <button type="button" class="btn btn-xs ${!isCurrentWeekMode ? 'btn-primary' : 'btn-secondary'}" id="btn-master-mode-range" style="border-radius:20px; font-size:0.75rem; font-weight:700;">🗓️ Date Range</button>
+              <button type="button" class="btn btn-xs ${isCurrentWeekMode ? 'btn-primary' : 'btn-secondary'}" id="btn-master-mode-week" style="border-radius:20px; font-size:0.75rem; font-weight:700;">Current Week</button>
+              <button type="button" class="btn btn-xs ${!isCurrentWeekMode ? 'btn-primary' : 'btn-secondary'}" id="btn-master-mode-range" style="border-radius:20px; font-size:0.75rem; font-weight:700;">Date Range</button>
             </div>
           </div>
 
           <div class="nav-row master-range-bar" style="padding:0.6rem 0.85rem; border-radius:var(--radius-md); border:1px solid var(--border-color); display:flex; align-items:center; gap:1rem; flex-wrap:wrap; opacity:${isCurrentWeekMode ? 0.6 : 1};">
-            <span style="font-weight:700; font-size:0.85rem; color:var(--primary);">🗓️ Term & Week Range:</span>
+            <span style="font-weight:700; font-size:0.85rem; color:var(--primary);">Term & Week Range:</span>
             
             <div style="display:flex; align-items:center; gap:0.4rem;">
               <span style="font-size:0.8rem; color:var(--text-muted); font-weight:600;">From:</span>
@@ -3703,7 +3712,7 @@
             </div>
 
             <div style="font-size:0.8rem; font-weight:700; color:var(--accent-teal); margin-left:auto;">
-              ${isCurrentWeekMode ? `📍 Showing Current Week (${TermManager.formatDisplayDate(state.currentDate)})` : `📅 Showing ${activeRange.length} ${activeRange.length === 1 ? 'Week' : 'Weeks'} Inclusive`}
+              ${isCurrentWeekMode ? `Showing Current Week (${TermManager.formatDisplayDate(state.currentDate)})` : `Showing ${activeRange.length} ${activeRange.length === 1 ? 'Week' : 'Weeks'} Inclusive`}
             </div>
           </div>
         </div>
@@ -4327,6 +4336,10 @@
     }
   };
 
+  if (typeof window !== 'undefined') {
+    window.MasterScheduleUI = MasterScheduleUI;
+  }
+
   const ConflictModal = {
     currentClassId: null,
 
@@ -4453,6 +4466,9 @@
       });
     }
   };
+  if (typeof window !== 'undefined') {
+    window.ConflictModal = ConflictModal;
+  }
 
   // Requirement 1: Interactive Spotlight Tour Engine
   const SpotlightTour = {
@@ -4765,6 +4781,13 @@
     }
   };
 
+  /* ==========================================================================
+     Class Timer & Break Pacer Integration
+     (Canonical implementation modularized into js/timer.js)
+     ========================================================================== */
+  const ClassTimer = (typeof window !== 'undefined' && window.ClassTimer) ? window.ClassTimer : null;
+
+
   const HomeworkUI = {
     selectedClassId: null,
     selectedTermId: 't1',
@@ -4800,7 +4823,7 @@
       this.whiteboardLayoutMode = (this.whiteboardLayoutMode === 'bubbles') ? 'list' : 'bubbles';
       const btn = document.getElementById('btn-toggle-wb-layout');
       if (btn) {
-        btn.innerHTML = (this.whiteboardLayoutMode === 'bubbles') ? '🫧 Bubbles' : '📋 List';
+        btn.innerHTML = (this.whiteboardLayoutMode === 'bubbles') ? 'Bubbles' : 'List';
         btn.title = (this.whiteboardLayoutMode === 'bubbles') ? 'Switch to Vertical List view' : 'Switch to Bubbled Grid view';
       }
       this.renderWhiteboardContent();
@@ -4847,6 +4870,12 @@
       this.renderTermAndWeekPicker();
       this.renderMainContent();
       this.bindEvents();
+      if (typeof ClassTimer !== 'undefined') {
+        ClassTimer.init();
+        if (this.selectedClassId) {
+          ClassTimer.selectedClassId = this.selectedClassId;
+        }
+      }
     },
 
     ensureDefaultTermAndWeek() {
@@ -4988,6 +5017,14 @@
     getFormattedClassworkForLesson(lesson) {
       if (!lesson || !lesson.classwork || !Array.isArray(lesson.classwork)) return [];
       return lesson.classwork.filter(item => item && (item.type || item.work));
+    },
+
+    isLessonAssessment(lesson) {
+      if (!lesson) return false;
+      if (lesson.isTestMilestone || lesson.isAssessment || lesson.isTest) return true;
+      const title = (lesson.title || '').trim().toLowerCase();
+      const regex = /\b(assessment|test|exam|sac|quiz)\b/i;
+      return regex.test(title);
     },
 
     aggregateTaskObjects(taskList) {
@@ -5146,12 +5183,7 @@
                   <div>${dayName} ${slot.periodName}</div>
                   <div style="font-size:0.75rem; opacity:0.9; font-weight:500;">(${TermManager.formatDisplayDate(slot.date)})</div>
                 </div>
-                <div style="display:flex; gap:0.35rem; margin-top:0.25rem; flex-wrap:wrap; justify-content:flex-end;">
-                  ${syncTileBtn}
-                  <button type="button" class="btn btn-secondary btn-xs btn-edit-homework-lesson" data-class="${classObj.id}" data-lesson-id="${lesson.id}" style="font-size:0.75rem; padding:0.2rem 0.5rem;" title="Edit lesson plan & classwork">
-                    ✏️ Edit
-                  </button>
-                </div>
+                ${syncTileBtn ? `<div style="display:flex; justify-content:flex-end; margin-top:0.25rem;">${syncTileBtn}</div>` : ''}
               </div>
             </div>
             <div>${classworkHtml}</div>
@@ -5164,7 +5196,7 @@
       container.innerHTML = `
         <div style="margin-bottom: 1.5rem;">
           <h4 class="homework-section-title">
-            🗓️ Scheduled Lessons & Classwork for ${selectedClassName} — ${weekRange.label} (${scheduledEntries.length} Lesson Period/s)
+            Scheduled Lessons & Classwork for ${selectedClassName} — ${weekRange.label} (${scheduledEntries.length} Lesson Period/s)
           </h4>
           <div class="homework-grid">
             ${cardsHtml}
@@ -5174,28 +5206,18 @@
         <div class="homework-summary-wrapper">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
             <div style="font-weight:700; font-size:0.95rem; color:var(--text-main); display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-              <span>📋 Formatted Homework Summary for ${selectedClassName}</span>
-              <span class="homework-summary-badge">
-                ✨ Highlight & Copy (Ctrl+C)
-              </span>
+              <span>Formatted Homework Summary for ${selectedClassName}</span>
             </div>
             <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
               <div style="display:inline-flex; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); background:var(--bg-subtle, rgba(15,23,42,0.4));">
                 <button type="button" class="btn ${this.groupingMode === 'category' ? 'btn-primary' : 'btn-secondary'} btn-xs" id="btn-hw-group-category" style="font-size:0.78rem; padding:0.3rem 0.65rem;" title="Collate all homework tasks by category across the week">
-                  📂 By Category
+                  Category
                 </button>
                 <button type="button" class="btn ${this.groupingMode === 'lesson' ? 'btn-primary' : 'btn-secondary'} btn-xs" id="btn-hw-group-lesson" style="font-size:0.78rem; padding:0.3rem 0.65rem;" title="Show homework tasks broken down by lesson">
-                  📖 By Lesson
+                  Lesson
                 </button>
               </div>
-              <button type="button" class="btn btn-secondary btn-sm" id="btn-select-summary-text" style="font-size:0.8rem; padding:0.35rem 0.85rem; font-weight:700;" title="Select all text below for quick Ctrl+C copy">
-                🔍 Select All Text
-              </button>
             </div>
-          </div>
-
-          <div style="font-size:0.82rem; color:var(--text-muted); margin-bottom:0.75rem;">
-            💡 Highlight the text inside the box below and press <strong>Ctrl+C</strong> to copy with bold headers and active links directly into Google Classroom!
           </div>
 
           <div id="homework-summary-markdown-box" class="homework-summary-rendered-box">
@@ -5221,8 +5243,13 @@
 
       this.isManualFontScale = false;
       this.coveredLessonLimit = null;
+      this.hiddenLessonIds = new Set();
       this.renderWhiteboardContent();
       backdrop.classList.add('active');
+      if (typeof ClassTimer !== 'undefined') {
+        ClassTimer.selectedClassId = this.selectedClassId;
+        ClassTimer.updateDOM();
+      }
     },
 
     renderWhiteboardContent() {
@@ -5248,7 +5275,20 @@
         return;
       }
 
+      this.hiddenLessonIds = this.hiddenLessonIds || new Set();
+
+      scheduledEntries.forEach((entry, i) => {
+        entry.weekLessonIndex = i + 1;
+      });
+
       const totalLessons = scheduledEntries.length;
+      let visibleEntries = (this.coveredLessonLimit === null)
+        ? scheduledEntries
+        : scheduledEntries.slice(0, this.coveredLessonLimit);
+
+      const hiddenCount = scheduledEntries.filter(entry => this.hiddenLessonIds.has(entry.lesson.id)).length;
+      visibleEntries = visibleEntries.filter(entry => !this.hiddenLessonIds.has(entry.lesson.id));
+
       let btnHtml = `
         <button class="btn ${this.coveredLessonLimit === null ? 'btn-primary' : 'btn-secondary'} btn-sm wb-progress-btn" data-limit="all">
           All Lessons (${totalLessons}/${totalLessons})
@@ -5263,24 +5303,28 @@
           </button>
         `;
       }
+      if (hiddenCount > 0) {
+        btnHtml += `
+          <button type="button" class="btn btn-warning btn-sm btn-wb-unhide-all" id="btn-wb-unhide-all" style="font-weight:700;" title="Restore hidden lesson(s)">
+            Restore ${hiddenCount} Hidden
+          </button>
+        `;
+      }
       if (progressButtonsContainer) progressButtonsContainer.innerHTML = btnHtml;
 
       if (progressLabel) {
-        progressLabel.textContent = (this.coveredLessonLimit === null)
+        const baseLabel = (this.coveredLessonLimit === null)
           ? `Showing All ${totalLessons} Lessons`
           : `Showing Lessons 1 to ${this.coveredLessonLimit} of ${totalLessons}`;
+        progressLabel.textContent = hiddenCount > 0 ? `${baseLabel} (${hiddenCount} Hidden)` : baseLabel;
       }
 
       const wbGroupBtn = document.getElementById('btn-toggle-wb-grouping');
       if (wbGroupBtn) {
         const isLessonGrouping = (this.groupingMode === 'lesson');
-        wbGroupBtn.innerHTML = isLessonGrouping ? '📖 By Lesson' : '📂 By Category';
-        wbGroupBtn.title = isLessonGrouping ? 'Switch to Weekly Categories view' : 'Switch to By Lesson view';
+        wbGroupBtn.innerHTML = isLessonGrouping ? 'Lesson' : 'Category';
+        wbGroupBtn.title = isLessonGrouping ? 'Switch to Category view' : 'Switch to Lesson view';
       }
-
-      const visibleEntries = (this.coveredLessonLimit === null)
-        ? scheduledEntries
-        : scheduledEntries.slice(0, this.coveredLessonLimit);
 
       // Lesson Grouping Display Mode
       if (this.groupingMode === 'lesson') {
@@ -5289,13 +5333,14 @@
         const isBubbleLayout = (this.whiteboardLayoutMode !== 'list');
         let wbHtml = `<div class="whiteboard-cards-grid ${isBubbleLayout ? 'layout-bubbles' : 'layout-list'}">`;
 
-        visibleEntries.forEach((entry, idx) => {
+        const cardsData = visibleEntries.map(entry => {
           const { slot, lesson, classObj } = entry;
           const classworkItems = this.getFormattedClassworkForLesson(lesson);
 
           const days = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
           const dayName = days[slot.dayOfWeek] || '';
-          const lessonDisplayTitle = `Lesson ${idx + 1}`;
+          const lessonNumber = entry.weekLessonIndex || (scheduledEntries.indexOf(entry) + 1);
+          const lessonDisplayTitle = `Lesson ${lessonNumber}`;
 
           const lessonGrouped = {};
           classworkItems.forEach(item => {
@@ -5310,11 +5355,33 @@
           });
 
           const catKeys = Object.keys(lessonGrouped);
+          const hasWork = catKeys.length > 0;
+          const isAssessment = this.isLessonAssessment(lesson);
+          const isCompact = !hasWork || isAssessment;
+          const cardClass = `whiteboard-card ${isCompact ? 'wb-card-compact' : ''} ${isAssessment ? 'wb-card-test' : ''} ${!hasWork && !isAssessment ? 'wb-card-no-tasks' : ''}`.trim();
           let cardBodyHtml = '';
 
-          if (catKeys.length === 0) {
-            cardBodyHtml = `<div style="font-size:0.95rem; color:#94a3b8; font-style:italic; padding:0.5rem 0;">No classwork tasks specified for this lesson.</div>`;
+          if (!hasWork) {
+            if (!isAssessment) {
+              anyTasksInWeek = true;
+              totalWorkItemsCount += 1;
+              cardBodyHtml = `
+                <div class="wb-compact-badge wb-catchup-badge">Catch Up</div>
+              `;
+            } else {
+              anyTasksInWeek = true;
+              const testTitle = (lesson.title && !lesson.title.toLowerCase().startsWith('lesson')) ? lesson.title : 'Test';
+              cardBodyHtml = `
+                <div class="wb-compact-badge wb-test-badge">${testTitle}</div>
+              `;
+            }
           } else {
+            anyTasksInWeek = true;
+            let testHeaderHtml = '';
+            if (isAssessment) {
+              const testTitle = (lesson.title && !lesson.title.toLowerCase().startsWith('lesson')) ? lesson.title : 'Test';
+              testHeaderHtml = `<div class="wb-compact-badge wb-test-badge" style="margin-bottom:calc(0.4rem * var(--wb-font-scale, 1));">${testTitle}</div>`;
+            }
             anyTasksInWeek = true;
             if (isBubbleLayout) {
               const bubbleGroups = catKeys.map(catKey => {
@@ -5354,7 +5421,7 @@
                 `;
               }).join('');
 
-              cardBodyHtml = `<div class="whiteboard-items-flow">${bubbleGroups}</div>`;
+              cardBodyHtml = `${testHeaderHtml}<div class="whiteboard-items-flow">${bubbleGroups}</div>`;
             } else {
               let itemsListHtml = '';
               catKeys.forEach(catKey => {
@@ -5390,25 +5457,50 @@
                 });
               });
 
-              cardBodyHtml = `<div>${itemsListHtml}</div>`;
+              cardBodyHtml = `${testHeaderHtml}<div>${itemsListHtml}</div>`;
             }
           }
 
-          wbHtml += `
-            <div class="whiteboard-card">
+          const cardHtml = `
+            <div class="${cardClass}">
+              <button type="button" class="wb-tile-hide-btn" data-lesson-id="${lesson.id}" title="Hide this lesson" aria-label="Hide lesson">✕</button>
               <div class="whiteboard-type-header">
-                <div style="display:flex; align-items:center; gap:0.5rem;" title="${lesson.title ? lesson.title.trim() : lessonDisplayTitle}">
-                  <span>📖</span>
+                <div style="display:flex; align-items:center; gap:0.5rem; white-space:nowrap;" title="${lesson.title ? lesson.title.trim() : lessonDisplayTitle}">
                   <span>${lessonDisplayTitle}</span>
                 </div>
-                <span class="wb-card-slot-badge" title="${TermManager.formatDisplayDate(slot.date)}">
-                  ${dayName} ${slot.periodName}
-                </span>
+                <div style="display:flex; align-items:center; white-space:nowrap;">
+                  <span class="wb-card-slot-badge" title="${TermManager.formatDisplayDate(slot.date)}">
+                    ${dayName} ${slot.periodName}
+                  </span>
+                </div>
               </div>
               ${cardBodyHtml}
             </div>
           `;
+
+          return {
+            isCompact,
+            cardHtml
+          };
         });
+
+        let i = 0;
+        while (i < cardsData.length) {
+          const current = cardsData[i];
+          const next = cardsData[i + 1];
+          if (isBubbleLayout && current.isCompact && next && next.isCompact) {
+            wbHtml += `
+              <div class="wb-compact-stack">
+                ${current.cardHtml}
+                ${next.cardHtml}
+              </div>
+            `;
+            i += 2;
+          } else {
+            wbHtml += current.cardHtml;
+            i += 1;
+          }
+        }
 
         wbHtml += '</div>';
 
@@ -5438,12 +5530,14 @@
         items.forEach(item => {
           const typeKey = (item.type || 'General Work').trim();
           if (!groupedByType[typeKey]) groupedByType[typeKey] = [];
-          groupedByType[typeKey].push({
-            work: item.work || '',
-            link: item.link || '',
-            lessonTitle: entry.lesson.title,
-            className: entry.classObj.name
-          });
+          if (item.work && item.work.trim()) {
+            groupedByType[typeKey].push({
+              work: item.work || '',
+              link: item.link || '',
+              lessonTitle: entry.lesson.title,
+              className: entry.classObj.name
+            });
+          }
         });
       });
 
@@ -5546,7 +5640,6 @@
           <div class="whiteboard-card">
             <div class="whiteboard-type-header">
               <div style="display:flex; align-items:center; gap:0.5rem;">
-                <span>${icon}</span>
                 <span>${typeKey}</span>
               </div>
             </div>
@@ -5574,7 +5667,8 @@
       return structured.map(bullet => {
         if (bullet.type === 'chapter') {
           if (bullet.items.length === 0) return bullet.prefix;
-          return `${bullet.prefix}(${bullet.items.map(i => i.work).join(', ')})`;
+          const sub = bullet.items.map(i => i.work).join(', ');
+          return `${bullet.prefix}${sub ? ': ' : ''}${sub}`;
         } else {
           return bullet.items.map(i => i.work).join(', ');
         }
@@ -5596,7 +5690,21 @@
 
         entries.forEach((entry, idx) => {
           const items = this.getFormattedClassworkForLesson(entry.lesson);
-          if (items.length === 0) return;
+          const hasWork = items.some(it => it && it.work && it.work.trim());
+          const isAssessment = this.isLessonAssessment(entry.lesson);
+
+          // Strict lesson numbering with lesson titles removed: Lesson 1, Lesson 2, etc.
+          const headerText = `Lesson ${idx + 1}`;
+
+          if (!hasWork) {
+            totalTasksCount++;
+            if (isAssessment) {
+              lessonBlocks.push(`${headerText}\nTest`);
+            } else {
+              lessonBlocks.push(`${headerText}\nCatch Up`);
+            }
+            return;
+          }
 
           const groupedForLesson = {};
           items.forEach(item => {
@@ -5618,18 +5726,21 @@
           });
 
           const catKeys = Object.keys(groupedForLesson);
-          if (catKeys.length === 0) return;
+          if (catKeys.length === 0) {
+            totalTasksCount++;
+            if (isAssessment) {
+              lessonBlocks.push(`${headerText}\nTest`);
+            } else {
+              lessonBlocks.push(`${headerText}\nCatch Up`);
+            }
+            return;
+          }
           totalTasksCount += catKeys.length;
-
-          const cleanTitle = (entry.lesson && entry.lesson.title && entry.lesson.title.trim().toLowerCase() !== `lesson ${idx + 1}`)
-            ? entry.lesson.title.replace(/^Lesson\s*\d+\s*[-:]?\s*/i, '').replace(/^\d+[\.\:\-\s]+/, '').trim()
-            : '';
-          const headerText = cleanTitle ? `Lesson ${idx + 1} - ${cleanTitle}` : `Lesson ${idx + 1}`;
 
           const blockLines = [headerText];
           catKeys.forEach(cat => {
             const aggWorks = this.aggregateTaskItems(groupedForLesson[cat]);
-            blockLines.push(`${cat} - ${aggWorks.join(', ')}`);
+            blockLines.push(`${cat} - ${aggWorks.join(' | ')}`);
           });
 
           lessonBlocks.push(blockLines.join('\n'));
@@ -5743,7 +5854,21 @@
 
         entries.forEach((entry, idx) => {
           const items = this.getFormattedClassworkForLesson(entry.lesson);
-          if (items.length === 0) return;
+          const hasWork = items.some(it => it && it.work && it.work.trim());
+          const isAssessment = this.isLessonAssessment(entry.lesson);
+
+          // Strict lesson numbering with lesson titles removed: Lesson 1, Lesson 2, etc.
+          const headerText = `Lesson ${idx + 1}`;
+
+          if (!hasWork) {
+            totalTasksCount++;
+            let blockHtml = `<div style="margin-top: 0.65rem; margin-bottom: 0.65rem;">`;
+            blockHtml += `<div style="font-weight: 700; font-size: 1.02em; margin-bottom: 0.25rem;">${headerText}</div>`;
+            blockHtml += `<div style="margin-bottom: 0.2rem; padding-left: 0.25rem;">${isAssessment ? 'Test' : 'Catch Up'}</div>`;
+            blockHtml += `</div>`;
+            lessonBlocksHtml.push(blockHtml);
+            return;
+          }
 
           const groupedForLesson = {};
           items.forEach(item => {
@@ -5765,13 +5890,16 @@
           });
 
           const catKeys = Object.keys(groupedForLesson);
-          if (catKeys.length === 0) return;
+          if (catKeys.length === 0) {
+            totalTasksCount++;
+            let blockHtml = `<div style="margin-top: 0.65rem; margin-bottom: 0.65rem;">`;
+            blockHtml += `<div style="font-weight: 700; font-size: 1.02em; margin-bottom: 0.25rem;">${headerText}</div>`;
+            blockHtml += `<div style="margin-bottom: 0.2rem; padding-left: 0.25rem;">${isAssessment ? 'Test' : 'Catch Up'}</div>`;
+            blockHtml += `</div>`;
+            lessonBlocksHtml.push(blockHtml);
+            return;
+          }
           totalTasksCount += catKeys.length;
-
-          const cleanTitle = (entry.lesson && entry.lesson.title && entry.lesson.title.trim().toLowerCase() !== `lesson ${idx + 1}`)
-            ? entry.lesson.title.replace(/^Lesson\s*\d+\s*[-:]?\s*/i, '').replace(/^\d+[\.\:\-\s]+/, '').trim()
-            : '';
-          const headerText = cleanTitle ? `Lesson ${idx + 1} - ${cleanTitle}` : `Lesson ${idx + 1}`;
 
           let blockHtml = `<div style="margin-top: 0.65rem; margin-bottom: 0.65rem;">`;
           blockHtml += `<div style="font-weight: 700; font-size: 1.02em; margin-bottom: 0.25rem;">${headerText}</div>`;
@@ -5796,7 +5924,7 @@
                   return it.work;
                 }).join(', ');
               }
-            }).join(', ');
+            }).join(' | ');
 
             blockHtml += `<div style="margin-bottom: 0.2rem; padding-left: 0.25rem;"><strong>${cat}</strong> - ${tasksFormatted}</div>`;
           });
@@ -5976,24 +6104,19 @@
           this.selectedClassId = btn.getAttribute('data-id');
           this.renderClassSelector();
           this.renderMainContent();
-        }
-      });
-
-      // Select all summary text handler
-      document.addEventListener('click', (e) => {
-        const selectBtn = e.target.closest('#btn-select-summary-text');
-        if (selectBtn) {
-          const box = document.getElementById('homework-summary-markdown-box');
-          if (box) {
-            const range = document.createRange();
-            range.selectNodeContents(box);
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
-            showToastNotification('🔍 Text selected! Press Ctrl+C to copy.');
+          if (typeof ClassTimer !== 'undefined') {
+            ClassTimer.selectedClassId = this.selectedClassId;
+            if (ClassTimer.activeSchedule && !ClassTimer.isPinned) {
+              ClassTimer.activeSchedule = null;
+              ClassTimer.updateDOM();
+            } else {
+              ClassTimer.updateDOM();
+            }
           }
         }
       });
+
+
 
       // Font zoom & layout/grouping toggle buttons handler
       document.addEventListener('click', (e) => {
@@ -6079,17 +6202,15 @@
         });
       }
 
-      // Click on homework lesson card or Edit button to open Lesson Plan Edit modal
+      // Click on homework lesson card to open Lesson Plan Edit modal
       document.addEventListener('click', (e) => {
         if (e.target.closest('.hw-card-sync-btn')) return;
 
-        const editBtn = e.target.closest('.btn-edit-homework-lesson');
         const card = e.target.closest('.homework-lesson-card');
 
-        if ((editBtn || card) && !e.target.closest('a')) {
-          const targetEl = editBtn || card;
-          const classId = targetEl.getAttribute('data-class');
-          const lessonId = targetEl.getAttribute('data-lesson-id');
+        if (card && !e.target.closest('a')) {
+          const classId = card.getAttribute('data-class');
+          const lessonId = card.getAttribute('data-lesson-id');
           if (classId && lessonId) {
             const classObj = state.classes.find(c => c.id === classId);
             const lessons = state.lessonPlans[classId] || [];
@@ -6155,16 +6276,43 @@
         });
       }
 
+      // Whiteboard hide tile & restore buttons handler
+      document.addEventListener('click', (e) => {
+        const hideBtn = e.target.closest('.wb-tile-hide-btn');
+        if (hideBtn) {
+          e.stopPropagation();
+          const lessonId = hideBtn.getAttribute('data-lesson-id');
+          if (lessonId) {
+            this.hiddenLessonIds = this.hiddenLessonIds || new Set();
+            this.hiddenLessonIds.add(lessonId);
+            this.renderWhiteboardContent();
+          }
+        }
+
+        const unhideBtn = e.target.closest('#btn-wb-unhide-all, .btn-wb-unhide-all');
+        if (unhideBtn) {
+          e.stopPropagation();
+          if (this.hiddenLessonIds) this.hiddenLessonIds.clear();
+          this.renderWhiteboardContent();
+        }
+      });
+
       document.addEventListener('click', (e) => {
         const limitBtn = e.target.closest('.wb-progress-btn');
         if (limitBtn) {
           const limitVal = limitBtn.getAttribute('data-limit');
           this.coveredLessonLimit = (limitVal === 'all') ? null : parseInt(limitVal, 10);
+          if (limitVal === 'all' && this.hiddenLessonIds) {
+            this.hiddenLessonIds.clear();
+          }
           this.renderWhiteboardContent();
         }
       });
     }
   };
+  if (typeof window !== 'undefined') {
+    window.HomeworkUI = HomeworkUI;
+  }
 
   function doResetData() {
     state.resetToDefault();
@@ -6625,6 +6773,13 @@
         } else {
           const targetClass = state.findOrCreateClassByName(classNameInput, classDetailsInput, classColorInput);
           if (targetClass) {
+            if (classColorInput && targetClass.color !== classColorInput) {
+              targetClass.color = classColorInput;
+            }
+            if (classDetailsInput && targetClass.details !== classDetailsInput) {
+              targetClass.details = classDetailsInput;
+            }
+            state.saveState();
             const customDetails = classDetailsInput.trim() ? classDetailsInput.trim() : null;
             TimetableManager.setSlotClass(week, day, periodId, targetClass.id, customDetails);
           }
@@ -6896,18 +7051,38 @@
   }
 
   function isColorNearWhite(hexColor) {
-    return getColorYIQ(hexColor) >= 215;
+    if (!hexColor || typeof hexColor !== 'string') return false;
+    let hex = hexColor.replace('#', '').trim();
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    if (hex.length < 6) return false;
+    const r = parseInt(hex.substring(0, 2), 16) || 0;
+    const g = parseInt(hex.substring(2, 4), 16) || 0;
+    const b = parseInt(hex.substring(4, 6), 16) || 0;
+    const min = Math.min(r, g, b);
+    const max = Math.max(r, g, b);
+    const sat = max === 0 ? 0 : (max - min) / max;
+    // Genuine white/off-white must have very high values across ALL RGB channels
+    // and extremely low saturation (achromatic, not a hue like yellow, lime, cyan, or pink)
+    return min >= 235 && sat <= 0.08;
   }
 
   function isColorNearBlack(hexColor) {
-    return getColorYIQ(hexColor) <= 40;
+    if (!hexColor || typeof hexColor !== 'string') return false;
+    let hex = hexColor.replace('#', '').trim();
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    if (hex.length < 6) return false;
+    const r = parseInt(hex.substring(0, 2), 16) || 0;
+    const g = parseInt(hex.substring(2, 4), 16) || 0;
+    const b = parseInt(hex.substring(4, 6), 16) || 0;
+    const max = Math.max(r, g, b);
+    return max <= 45;
   }
 
   function getClassCellStyles(hexColor, isDark) {
     const safeColor = hexColor || (isDark ? '#38bdf8' : '#2563eb');
     const yiq = getColorYIQ(safeColor);
-    const nearWhite = yiq >= 215;
-    const nearBlack = yiq <= 40;
+    const nearWhite = isColorNearWhite(safeColor);
+    const nearBlack = isColorNearBlack(safeColor);
 
     if (isDark) {
       if (nearBlack) {
@@ -6940,18 +7115,19 @@
           tagBorder: '1px solid rgba(255, 255, 255, 0.5)'
         };
       }
+      const isLuminous = yiq >= 180;
       return {
-        bg: `${safeColor}25`,
+        bg: `${safeColor}${isLuminous ? '35' : '25'}`,
         border: `2px solid ${safeColor}`,
         cardBorder: `1px solid ${safeColor}65`,
         accentBar: safeColor,
-        textColor: yiq < 140 ? '#ffffff' : safeColor,
+        textColor: isLuminous ? safeColor : (yiq < 140 ? '#ffffff' : safeColor),
         detailsColor: '#cbd5e1',
         dotBg: safeColor,
-        dotBorder: '1px solid rgba(255, 255, 255, 0.25)',
-        tagBg: `${safeColor}25`,
-        tagColor: yiq < 140 ? '#ffffff' : safeColor,
-        tagBorder: `1px solid ${safeColor}55`
+        dotBorder: '1px solid rgba(255, 255, 255, 0.35)',
+        tagBg: `${safeColor}${isLuminous ? '35' : '25'}`,
+        tagColor: isLuminous ? safeColor : (yiq < 140 ? '#ffffff' : safeColor),
+        tagBorder: `1px solid ${safeColor}66`
       };
     } else {
       // Light Mode
@@ -6985,18 +7161,19 @@
           tagBorder: '1px solid #0f172a'
         };
       }
+      const isLuminous = yiq >= 180;
       return {
-        bg: `${safeColor}22`,
+        bg: `${safeColor}${isLuminous ? '38' : '22'}`,
         border: `2px solid ${safeColor}`,
-        cardBorder: `1px solid ${safeColor}45`,
+        cardBorder: `1px solid ${safeColor}55`,
         accentBar: safeColor,
         textColor: yiq > 130 ? '#0f172a' : safeColor,
         detailsColor: '#334155',
         dotBg: safeColor,
-        dotBorder: '1px solid rgba(0, 0, 0, 0.15)',
-        tagBg: `${safeColor}22`,
-        tagColor: safeColor,
-        tagBorder: `1px solid ${safeColor}44`
+        dotBorder: isLuminous ? '1px solid rgba(0, 0, 0, 0.35)' : '1px solid rgba(0, 0, 0, 0.15)',
+        tagBg: `${safeColor}${isLuminous ? '38' : '22'}`,
+        tagColor: yiq > 140 ? '#0f172a' : safeColor,
+        tagBorder: `1px solid ${safeColor}66`
       };
     }
   }
@@ -7106,6 +7283,10 @@
     }
   };
 
+  if (typeof window !== 'undefined') {
+    window.ThemeManager = ThemeManager;
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
@@ -7171,7 +7352,23 @@
           modal.classList.add('active');
           state.updateStorageUI();
         }
+      } else if (targetModal === 'help') {
+        if (window.HelpUI) {
+          const q = urlParams.get('helpquery') || '';
+          window.HelpUI.openHelpModal(q);
+        } else {
+          const modal = document.getElementById('modal-help-backdrop');
+          if (modal) modal.classList.add('active');
+        }
       } else if (targetModal === 'whiteboard') {
+        const hwTerm = urlParams.get('hwterm');
+        const hwWeek = urlParams.get('hwweek');
+        const hwGrouping = urlParams.get('grouping');
+        const hwClass = urlParams.get('hwclass');
+        if (hwTerm) HomeworkUI.selectedTermId = hwTerm;
+        if (hwWeek) HomeworkUI.selectedWeekNum = parseInt(hwWeek, 10);
+        if (hwGrouping) HomeworkUI.groupingMode = hwGrouping;
+        if (hwClass) HomeworkUI.selectedClassId = hwClass;
         HomeworkUI.openWhiteboardModal();
       }
     } catch(e) {}

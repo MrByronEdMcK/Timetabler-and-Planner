@@ -763,8 +763,8 @@ export class StateStore {
     if (!trimmed) return null;
     let existing = this.classes.find(c => c.name.toLowerCase() === trimmed.toLowerCase());
     if (existing) {
-      if (!existing.details && details) existing.details = details;
-      if (!existing.color && color) existing.color = color;
+      if (details) existing.details = details;
+      if (color) existing.color = color;
       this.saveState();
       return existing;
     }

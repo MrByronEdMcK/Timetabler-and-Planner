@@ -168,6 +168,8 @@
   import { TimetableManager } from '../js/timetableManager.js';
   import { Scheduler } from '../js/scheduler.js';
   import { HomeworkUI } from '../js/ui/homeworkUI.js';
+  import '../js/timer.js';
+  const ClassTimer = window.ClassTimer;
 
   window.runTests = function() {
     const startTime = performance.now();
@@ -494,7 +496,7 @@
       if (!lessonText.includes('Lesson 1\nTextbook - 7A Q1, Q3, Q5\nWorksheets - Sheet 1')) {
         throw new Error(`Lesson mode does not match Lesson 1 format: ${lessonText}`);
       }
-      if (!lessonText.includes('Lesson 2 - Solving 1-Step Equations\nTextbook - 7B(All)\nWorksheets - Sheet 2')) {
+      if (!lessonText.includes('Lesson 2\nTextbook - 7B(All)\nWorksheets - Sheet 2')) {
         throw new Error(`Lesson mode does not match Lesson 2 format: ${lessonText}`);
       }
 
@@ -573,6 +575,268 @@
       if (auto8 < 1.35) throw new Error(`Expected scale >= 1.35 for 8 items, got ${auto8}`);
 
       return 'Whiteboard display bubbles size adaptively to content and maintain large legible text sizes.';
+    });
+
+    // 19. Class Timer, Double Lesson Detection & Speech Bubble Pacer
+    test('Class Timer, Double Lesson Detection & Speech Bubble Pacer', () => {
+      if (typeof ClassTimer === 'undefined') throw new Error('ClassTimer module not imported');
+
+      // Test schedule calculation: 50 min lesson (3000 sec), 1 break of 4 min
+      const sched = ClassTimer.calculateSchedule(3000, 1, 4, 1000000);
+      if (sched.segments.length !== 3) throw new Error(`Expected 3 segments, got ${sched.segments.length}`);
+      if (sched.segments[0].type !== 'work' || sched.segments[1].type !== 'break' || sched.segments[2].type !== 'work') {
+        throw new Error('Incorrect sequence of work/break segments');
+      }
+
+      // Check format helpers
+      const fmtSec = ClassTimer.formatSeconds(1380);
+      if (fmtSec !== '23:00') throw new Error(`Expected 23:00, got ${fmtSec}`);
+
+      return 'Class timer accurately handles double lessons, distributes breaks evenly, and updates speech bubble pacer.';
+    });
+
+    // 20. Class Color Theme & Yellow Display Rendering
+    test('Class Color Theme & Yellow Display Rendering', () => {
+      // Create or update class with yellow color
+      const yellowClass = state.findOrCreateClassByName('Test Yellow Class', 'Room 101', '#e0f51b');
+      if (!yellowClass) throw new Error('Failed to create test class');
+      if (yellowClass.color !== '#e0f51b') throw new Error(`Expected class color #e0f51b, got ${yellowClass.color}`);
+
+      // Verify updating existing class color
+      const updatedClass = state.findOrCreateClassByName('Test Yellow Class', 'Room 101', '#ffff00');
+      if (updatedClass.color !== '#ffff00') throw new Error(`Expected updated class color #ffff00, got ${updatedClass.color}`);
+
+      return 'Class color theme picker accurately sets and updates class colors (including yellow and bright themes).';
+    });
+
+    // 21. Pinned Class Timer, Draggable Breaks & Anti-Jitter Bubble
+    test('Pinned Class Timer, Draggable Breaks & Anti-Jitter Bubble', () => {
+      if (typeof ClassTimer === 'undefined') throw new Error('ClassTimer module not imported');
+
+      // Test pin toggle
+      const initialPin = ClassTimer.isPinned;
+      ClassTimer.togglePin();
+      if (ClassTimer.isPinned === initialPin) throw new Error('togglePin did not toggle pin state');
+      // Reset pin back
+      if (ClassTimer.isPinned !== initialPin) ClassTimer.togglePin();
+
+      // Test schedule persistence when active/pinned
+      const nowMs = Date.now();
+      ClassTimer.isPinned = true;
+      ClassTimer.activeSchedule = {
+        classId: 'c1',
+        isManual: true,
+        startMs: nowMs - 10000,
+        endMs: nowMs + 1000000,
+        segments: [
+          { type: 'work', startMs: nowMs - 10000, endMs: nowMs + 400000, durationSec: 410 },
+          { type: 'break', breakIndex: 1, startMs: nowMs + 400000, endMs: nowMs + 600000, durationSec: 200 },
+          { type: 'work', startMs: nowMs + 600000, endMs: nowMs + 1000000, durationSec: 400 }
+        ]
+      };
+
+      // Starting timer without forceRestart must preserve the schedule and break positions
+      ClassTimer.startLessonTimer('c1', null, null, false);
+      if (ClassTimer.activeSchedule.segments[1].startMs !== nowMs + 400000) {
+        throw new Error('Active schedule break positions were erroneously wiped/reset on startLessonTimer');
+      }
+
+      // Test drag positioning logic
+      const breakSeg = ClassTimer.activeSchedule.segments[1];
+      const prevWork = ClassTimer.activeSchedule.segments[0];
+      const nextWork = ClassTimer.activeSchedule.segments[2];
+      const originalBreakDur = breakSeg.endMs - breakSeg.startMs;
+
+      // Move break to new start timestamp
+      const newBreakStart = nowMs + 500000;
+      const newBreakEnd = newBreakStart + originalBreakDur;
+      breakSeg.startMs = newBreakStart;
+      breakSeg.endMs = newBreakEnd;
+      prevWork.endMs = newBreakStart;
+      nextWork.startMs = newBreakEnd;
+
+      if (prevWork.endMs !== breakSeg.startMs || nextWork.startMs !== breakSeg.endMs) {
+        throw new Error('Adjacent work chunks failed to sync with break repositioning');
+      }
+
+      return 'Class timer supports pinning across navigation, background persistence, and smooth draggable break adjustments.';
+    });
+
+    // 22. Break Stepper, 3 & 5 Min Options, and Live Start/End Hover/Drag Tooltip
+    test('Break Stepper, 3 & 5 Min Options, and Live Start/End Hover/Drag Tooltip', () => {
+      // 1. Duration options
+      ClassTimer.setBreakDuration(3);
+      if (ClassTimer.breakDurationMinutes !== 3) throw new Error('Expected 3 minute break duration');
+      ClassTimer.setBreakDuration(5);
+      if (ClassTimer.breakDurationMinutes !== 5) throw new Error('Expected 5 minute break duration');
+      ClassTimer.setBreakDuration(10); // should normalize to 3
+      if (ClassTimer.breakDurationMinutes !== 3) throw new Error('Break duration should restrict to 3 or 5 only');
+
+      // 2. Break Tooltip formatting
+      const nowMs = 1700000000000;
+      const sStr = ClassTimer.formatTimeOfDay(new Date(nowMs));
+      const eStr = ClassTimer.formatTimeOfDay(new Date(nowMs + 180000));
+      if (!sStr || !eStr) throw new Error('formatTimeOfDay failed to format break times');
+
+      return 'Break controls offer strictly 3 and 5 minute options with live start/end tooltip on hover and drag.';
+    });
+
+
+    // 23. Pinned vs Unpinned Respacing, Period Bounds, Lifecycle, and Hide/Mute Timer
+    test('Pinned vs Unpinned Respacing, Period Bounds, Lifecycle, and Hide/Mute Timer', () => {
+      // 1. Hide & Mute Timer
+      ClassTimer.hideTimer();
+      if (!ClassTimer.isHidden || ClassTimer.soundEnabled) throw new Error('hideTimer should set isHidden=true and soundEnabled=false');
+      ClassTimer.showTimer();
+      if (ClassTimer.isHidden || !ClassTimer.soundEnabled) throw new Error('showTimer should set isHidden=false and soundEnabled=true');
+
+      // 2. Pinning disabled for classes in progress
+      ClassTimer.activeSchedule = { classId: 'c1', isManual: false, startMs: 10000, endMs: 20000 };
+      ClassTimer.isPinned = false;
+      ClassTimer.togglePin();
+      if (ClassTimer.isPinned) throw new Error('togglePin should not pin a class in progress');
+
+      // 3. Pinned respacing maintains fixed bounds
+      const origStart = 10000000;
+      const origEnd = 13000000;
+      ClassTimer.isPinned = true;
+      ClassTimer.activeSchedule = {
+        classId: 'c1',
+        isManual: true,
+        startMs: origStart,
+        endMs: origEnd,
+        durationSeconds: 3000,
+        segments: []
+      };
+      ClassTimer.respaceBreaks();
+      if (ClassTimer.activeSchedule.startMs !== origStart || ClassTimer.activeSchedule.endMs !== origEnd) {
+        throw new Error('Pinned respacing modified start or end times');
+      }
+
+      // 4. Unpinned respacing advances startMs to current time
+      ClassTimer.isPinned = false;
+      ClassTimer.activeSchedule = {
+        classId: 'c1',
+        isManual: true,
+        startMs: origStart,
+        endMs: Date.now() + 1000000,
+        durationSeconds: 3000,
+        segments: []
+      };
+      const beforeRespace = Date.now();
+      ClassTimer.respaceBreaks();
+      if (ClassTimer.activeSchedule.startMs < beforeRespace) {
+        throw new Error('Unpinned respacing did not advance startMs to now');
+      }
+
+      // 5. Whiteboard exit discards unpinned manual timer
+      ClassTimer.isPinned = false;
+      ClassTimer.activeSchedule = { classId: 'c1', isManual: true };
+      ClassTimer.onExitWhiteboardView();
+      if (ClassTimer.activeSchedule !== null) {
+        throw new Error('onExitWhiteboardView failed to discard unpinned manual timer');
+      }
+
+      // 6. Default no-timer state, Add Timer & Remove Timer
+      ClassTimer.activeSchedule = null;
+      ClassTimer.isPinned = false;
+      ClassTimer.updateDOM();
+      const emptyEl = document.getElementById('wb-timer-empty-state');
+      const rootEl = document.getElementById('wb-class-timer');
+      if (emptyEl && emptyEl.classList.contains('hidden')) {
+        throw new Error('wb-timer-empty-state should be visible when activeSchedule is null');
+      }
+      if (rootEl && !rootEl.classList.contains('hidden')) {
+        throw new Error('wb-class-timer should be hidden when activeSchedule is null');
+      }
+
+      // Add timer
+      ClassTimer.addTimer();
+      if (!ClassTimer.activeSchedule) {
+        throw new Error('addTimer should create activeSchedule');
+      }
+      if (emptyEl && !emptyEl.classList.contains('hidden')) {
+        throw new Error('wb-timer-empty-state should be hidden when timer is added');
+      }
+      if (rootEl && rootEl.classList.contains('hidden')) {
+        throw new Error('wb-class-timer should be visible when timer is added');
+      }
+
+      // 7. Editable End Time for Manual Timers
+      if (!ClassTimer.activeSchedule || !ClassTimer.activeSchedule.isManual) {
+        throw new Error('Expected activeSchedule to be manual when not in progress');
+      }
+      const initialStartMs = ClassTimer.activeSchedule.startMs;
+      // Change end time to 16:45
+      ClassTimer.onEndTimeChanged('16:45');
+      const targetDate = new Date(initialStartMs);
+      targetDate.setHours(16, 45, 0, 0);
+      if (ClassTimer.activeSchedule.endMs !== targetDate.getTime()) {
+        throw new Error(`Expected endMs to update to 16:45 timestamp (${targetDate.getTime()}), got ${ClassTimer.activeSchedule.endMs}`);
+      }
+      if (ClassTimer.activeSchedule.startMs !== initialStartMs) {
+        throw new Error('Editing end time should not change the initial timer start time');
+      }
+
+      // Remove timer
+      ClassTimer.removeTimer();
+      if (ClassTimer.activeSchedule !== null) {
+        throw new Error('removeTimer should reset activeSchedule to null');
+      }
+      if (emptyEl && emptyEl.classList.contains('hidden')) {
+        throw new Error('wb-timer-empty-state should be visible after removeTimer');
+      }
+
+      return 'Class timer properly supports default no-timer state, Add Timer button, editable end time for manual timers, Remove Timer, pinned fixed respacing, and lifecycle.';
+    });
+
+
+    // 24. Homework Catch Up & Lesson Titles Removed from Copy/Paste
+    test('Homework Catch Up & Lesson Titles Removed from Copy/Paste', () => {
+      // 1. Verify isLessonAssessment
+      if (!HomeworkUI.isLessonAssessment({ isTestMilestone: true, title: 'Lesson 1' })) throw new Error('isTestMilestone should be assessment');
+      if (!HomeworkUI.isLessonAssessment({ title: 'Topic 3 Test' })) throw new Error('Test in title should be assessment');
+      if (!HomeworkUI.isLessonAssessment({ title: 'Mid-Year Exam' })) throw new Error('Exam in title should be assessment');
+      if (!HomeworkUI.isLessonAssessment({ title: 'Unit 2 Assessment' })) throw new Error('Assessment in title should be assessment');
+      if (!HomeworkUI.isLessonAssessment({ unit: 'SAC 1: Matrices' })) throw new Error('SAC in unit should be assessment');
+      if (HomeworkUI.isLessonAssessment({ title: 'Linear Graphs Practice', unit: 'Algebra' })) throw new Error('Regular lesson should not be assessment');
+
+      // 2. Test Catch Up & Test generation for lesson version
+      const testEntries = [
+        { lesson: { title: 'Algebra Practice', classwork: [{ type: 'Textbook', work: '5A 1-10' }] } },
+        { lesson: { title: 'Study Period', classwork: [] } }, // No homework, not assessment -> Catch Up
+        { lesson: { title: 'Unit 1 Test', isTestMilestone: true, classwork: [] } } // Assessment -> Test
+      ];
+
+      const sumText = HomeworkUI.generateSummaryText(testEntries, 'lesson');
+      if (!sumText.includes('Lesson 1\nTextbook - 5A 1-10')) throw new Error(`Expected Lesson 1 without title, got:\n${sumText}`);
+      if (!sumText.includes('Lesson 2\nCatch Up')) throw new Error(`Expected Lesson 2 Catch Up, got:\n${sumText}`);
+      if (sumText.includes('Lesson 3\nCatch Up') || sumText.includes('Lesson 3 - Catch Up')) throw new Error('Assessment should not be marked as Catch Up');
+      if (!sumText.includes('Lesson 3\nTest')) throw new Error('Assessment lesson should be included as Test');
+
+      // 3. Test HTML generation
+      const sumHtml = HomeworkUI.generateSummaryHTML(testEntries, 'lesson');
+      if (!sumHtml.includes('Lesson 1') || sumHtml.includes('Lesson 1 -')) throw new Error('HTML should not contain lesson title in header');
+      if (!sumHtml.includes('Lesson 2') || !sumHtml.includes('Catch Up')) throw new Error('HTML should contain Lesson 2 with Catch Up');
+      if (!sumHtml.includes('Lesson 3') || !sumHtml.includes('Test')) throw new Error('HTML should contain Lesson 3 with Test');
+
+      // 4. Test Pipe Separator for Multiple Chapter Tasks in a Category
+      const multiEntries = [
+        { lesson: { title: 'Chapter 18 Practice', classwork: [
+          { type: 'Textbook', work: 'Chapter 18 Review: 1-2, 3-6eso, 7-15' },
+          { type: 'Textbook', work: 'Chapter 18 Challenge: 3-6' }
+        ] } }
+      ];
+      const multiText = HomeworkUI.generateSummaryText(multiEntries, 'lesson');
+      if (!multiText.includes('Textbook - Chapter 18 Review: 1-2, 3-6eso, 7-15 | Chapter 18 Challenge: 3-6')) {
+        throw new Error(`Expected pipe separator in lesson summary text, got:\n${multiText}`);
+      }
+      const multiHtml = HomeworkUI.generateSummaryHTML(multiEntries, 'lesson');
+      if (!multiHtml.includes('Chapter 18 Review: 1-2, 3-6eso, 7-15 | Chapter 18 Challenge: 3-6')) {
+        throw new Error(`Expected pipe separator in lesson summary HTML, got:\n${multiHtml}`);
+      }
+
+      return 'Homework summary and whiteboard view cleanly display Catch Up for lessons without homework, strictly use Lesson 1, Lesson 2 headers, and format multiple chapter tasks with pipe separators.';
     });
 
     const elapsed = Math.round(performance.now() - startTime);

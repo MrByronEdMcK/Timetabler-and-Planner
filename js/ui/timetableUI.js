@@ -148,11 +148,42 @@ export const TimetableUI = {
     const days = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     const periodObj = state.periods.find(p => p.id === periodId);
 
-    document.getElementById('slot-modal-title').textContent = `Assign ${days[day]} Period ${periodObj ? periodObj.name : ''} (Week ${week})`;
+    const titleEl = document.getElementById('slot-modal-title');
+    if (titleEl) {
+      const weekLabel = (state.timetableCycleWeeks === 2) ? (week === 1 ? 'Week A' : 'Week B') : `Week ${week}`;
+      titleEl.textContent = `Assign ${days[day]} Period ${periodObj ? periodObj.name : ''} (${weekLabel})`;
+    }
 
-    const select = document.getElementById('slot-class-select');
-    select.innerHTML = `<option value="">-- Empty (No Class) --</option>` +
-      state.classes.map(c => `<option value="${c.id}" ${currentClass && currentClass.id === c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+    const datalist = document.getElementById('class-autocomplete-list');
+    if (datalist) {
+      datalist.innerHTML = state.classes.map(c => `<option value="${c.name}">`).join('');
+    }
+
+    const input = document.getElementById('slot-class-input');
+    const detailsInput = document.getElementById('slot-class-details-input');
+    const colorInput = document.getElementById('slot-class-color-input');
+
+    const initialClassName = currentClass ? currentClass.name.toLowerCase() : '';
+    if (input) input.value = currentClass ? currentClass.name : '';
+    if (detailsInput) detailsInput.value = currentClass ? (currentClass.details || '') : '';
+    if (colorInput) colorInput.value = currentClass ? currentClass.color : '#3b82f6';
+
+    if (input && !input._hasAutoFillListener) {
+      input._hasAutoFillListener = true;
+      input.addEventListener('input', () => {
+        const val = input.value.trim().toLowerCase();
+        if (!val) return;
+        const match = state.classes.find(c => c.name.toLowerCase() === val);
+        if (match) {
+          if (detailsInput && (!detailsInput.value.trim() || val !== input._lastLoadedClassName)) {
+            detailsInput.value = match.details || '';
+          }
+          if (colorInput) colorInput.value = match.color || '#3b82f6';
+          input._lastLoadedClassName = val;
+        }
+      });
+    }
+    if (input) input._lastLoadedClassName = initialClassName;
 
     backdrop.setAttribute('data-week', week);
     backdrop.setAttribute('data-day', day);

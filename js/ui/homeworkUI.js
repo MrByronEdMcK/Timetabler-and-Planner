@@ -5,6 +5,8 @@
 import { state } from '../state.js';
 import { Scheduler } from '../scheduler.js';
 import { TermManager } from '../termManager.js';
+import '../timer.js';
+const ClassTimer = (typeof window !== 'undefined' && window.ClassTimer) ? window.ClassTimer : undefined;
 
 export const HomeworkUI = {
   selectedClassId: null,
@@ -40,7 +42,7 @@ export const HomeworkUI = {
     this.whiteboardLayoutMode = (this.whiteboardLayoutMode === 'bubbles') ? 'list' : 'bubbles';
     const btn = document.getElementById('btn-toggle-wb-layout');
     if (btn) {
-      btn.innerHTML = (this.whiteboardLayoutMode === 'bubbles') ? '🫧 Bubbles' : '📋 List';
+      btn.innerHTML = (this.whiteboardLayoutMode === 'bubbles') ? 'Bubbles' : 'List';
       btn.title = (this.whiteboardLayoutMode === 'bubbles') ? 'Switch to Vertical List view' : 'Switch to Bubbled Grid view';
     }
     this.renderWhiteboardContent();
@@ -55,6 +57,13 @@ export const HomeworkUI = {
     this.renderTermAndWeekPicker();
     this.renderMainContent();
     this.bindEvents();
+
+    if (typeof ClassTimer !== 'undefined') {
+      ClassTimer.init();
+      if (this.selectedClassId) {
+        ClassTimer.selectedClassId = this.selectedClassId;
+      }
+    }
   },
 
   ensureDefaultTermAndWeek() {
@@ -184,6 +193,14 @@ export const HomeworkUI = {
     return lesson.classwork.filter(item => item && (item.type || item.work));
   },
 
+  isLessonAssessment(lesson) {
+    if (!lesson) return false;
+    if (lesson.isTestMilestone || lesson.isAssessment || lesson.isTest) return true;
+    const title = (lesson.title || '').trim().toLowerCase();
+    const regex = /\b(assessment|test|exam|sac|quiz)\b/i;
+    return regex.test(title);
+  },
+
   aggregateTaskObjects(taskList) {
     if (!Array.isArray(taskList) || taskList.length === 0) return [];
 
@@ -253,7 +270,8 @@ export const HomeworkUI = {
     return structured.map(bullet => {
       if (bullet.type === 'chapter') {
         if (bullet.items.length === 0) return bullet.prefix;
-        return `${bullet.prefix}(${bullet.items.map(i => i.work).join(', ')})`;
+        const sub = bullet.items.map(i => i.work).join(', ');
+        return `${bullet.prefix}${sub ? ': ' : ''}${sub}`;
       } else {
         return bullet.items.map(i => i.work).join(', ');
       }
@@ -288,8 +306,15 @@ export const HomeworkUI = {
       const classworkItems = this.getFormattedClassworkForLesson(lesson);
 
       let classworkHtml = '';
-      if (classworkItems.length === 0) {
-        classworkHtml = `<div style="font-size:0.82rem; color:var(--text-dim); font-style:italic;">No classwork tasks specified. Edit lesson to add tasks.</div>`;
+      const hasSpecificWork = classworkItems.some(it => it && it.work && it.work.trim());
+      const isAssessmentLesson = this.isLessonAssessment(lesson);
+
+      if (classworkItems.length === 0 || !hasSpecificWork) {
+        if (!isAssessmentLesson) {
+          classworkHtml = `<div style="margin-bottom:0.4rem; font-size:0.88rem;"><span class="cw-badge cw-badge-default">Task</span> <strong>Catch Up</strong></div>`;
+        } else {
+          classworkHtml = `<div style="font-size:0.82rem; color:var(--text-dim); font-style:italic;">🎯 Assessment / Test Milestone</div>`;
+        }
       } else {
         classworkHtml = classworkItems.map(cw => {
           const typeLower = (cw.type || '').toLowerCase();
@@ -338,12 +363,7 @@ export const HomeworkUI = {
                 <div>${dayName} ${slot.periodName}</div>
                 <div style="font-size:0.75rem; opacity:0.9; font-weight:500;">(${TermManager.formatDisplayDate(slot.date)})</div>
               </div>
-              <div style="display:flex; gap:0.35rem; margin-top:0.25rem; flex-wrap:wrap; justify-content:flex-end;">
-                ${syncTileBtn}
-                <button type="button" class="btn btn-secondary btn-xs btn-edit-homework-lesson" data-class="${classObj.id}" data-lesson-id="${lesson.id}" style="font-size:0.75rem; padding:0.2rem 0.5rem;" title="Edit lesson plan & classwork">
-                  ✏️ Edit
-                </button>
-              </div>
+              ${syncTileBtn ? `<div style="display:flex; justify-content:flex-end; margin-top:0.25rem;">${syncTileBtn}</div>` : ''}
             </div>
           </div>
           <div>${classworkHtml}</div>
@@ -356,7 +376,7 @@ export const HomeworkUI = {
     container.innerHTML = `
       <div style="margin-bottom: 1.5rem;">
         <h4 style="font-size:1rem; font-weight:700; margin-bottom:0.75rem; color:var(--primary-light);">
-          🗓️ Scheduled Lessons & Classwork for ${selectedClassName} — ${weekRange.label} (${scheduledEntries.length} Lesson Period/s)
+          Scheduled Lessons & Classwork for ${selectedClassName} — ${weekRange.label} (${scheduledEntries.length} Lesson Period/s)
         </h4>
         <div class="homework-grid">
           ${cardsHtml}
@@ -366,28 +386,18 @@ export const HomeworkUI = {
       <div class="homework-summary-wrapper" style="margin-top:2rem; background: var(--bg-card-dark, rgba(30, 41, 59, 0.85)); padding:1.25rem; border-radius:var(--radius-md); border:1px solid var(--border-color);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
           <div style="font-weight:700; font-size:0.95rem; color:var(--text-main); display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-            <span>📋 Formatted Homework Summary for ${selectedClassName}</span>
-            <span style="font-size:0.75rem; font-weight:600; color:#38bdf8; background:rgba(56, 189, 248, 0.12); padding:0.25rem 0.65rem; border-radius:12px; border:1px solid rgba(56, 189, 248, 0.25);">
-              ✨ Highlight & Copy (Ctrl+C)
-            </span>
+            <span>Formatted Homework Summary for ${selectedClassName}</span>
           </div>
           <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
             <div style="display:inline-flex; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); background:var(--bg-subtle, rgba(15,23,42,0.4));">
               <button type="button" class="btn ${this.groupingMode === 'category' ? 'btn-primary' : 'btn-secondary'} btn-xs" id="btn-hw-group-category" style="font-size:0.78rem; padding:0.3rem 0.65rem;" title="Collate all homework tasks by category across the week">
-                📂 By Category
+                Category
               </button>
               <button type="button" class="btn ${this.groupingMode === 'lesson' ? 'btn-primary' : 'btn-secondary'} btn-xs" id="btn-hw-group-lesson" style="font-size:0.78rem; padding:0.3rem 0.65rem;" title="Show homework tasks broken down by lesson">
-                📖 By Lesson
+                Lesson
               </button>
             </div>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-select-summary-text" style="font-size:0.8rem; padding:0.35rem 0.85rem; font-weight:700;" title="Select all text below for quick Ctrl+C copy">
-              🔍 Select All Text
-            </button>
           </div>
-        </div>
-
-        <div style="font-size:0.82rem; color:var(--text-muted); margin-bottom:0.75rem;">
-          💡 Highlight the text inside the box below and press <strong>Ctrl+C</strong> to copy with bold headers and active links directly into Google Classroom!
         </div>
 
         <div id="homework-summary-markdown-box" class="homework-summary-rendered-box" style="user-select: text; -webkit-user-select: text; background: rgba(15, 23, 42, 0.6); padding: 1.1rem 1.35rem; border-radius: 8px; border: 1px solid var(--border-color); color: var(--text-main); font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; font-size: 0.92rem;">
@@ -448,8 +458,14 @@ export const HomeworkUI = {
 
     this.isManualFontScale = false;
     this.coveredLessonLimit = null;
+    this.hiddenLessonIds = new Set();
     this.renderWhiteboardContent();
     backdrop.classList.add('active');
+
+    if (typeof ClassTimer !== 'undefined') {
+      ClassTimer.selectedClassId = this.selectedClassId;
+      ClassTimer.updateDOM();
+    }
   },
 
   renderWhiteboardContent() {
@@ -475,7 +491,20 @@ export const HomeworkUI = {
       return;
     }
 
+    this.hiddenLessonIds = this.hiddenLessonIds || new Set();
+
+    scheduledEntries.forEach((entry, i) => {
+      entry.weekLessonIndex = i + 1;
+    });
+
     const totalLessons = scheduledEntries.length;
+    let visibleEntries = (this.coveredLessonLimit === null)
+      ? scheduledEntries
+      : scheduledEntries.slice(0, this.coveredLessonLimit);
+
+    const hiddenCount = scheduledEntries.filter(entry => this.hiddenLessonIds.has(entry.lesson.id)).length;
+    visibleEntries = visibleEntries.filter(entry => !this.hiddenLessonIds.has(entry.lesson.id));
+
     let btnHtml = `
       <button class="btn ${this.coveredLessonLimit === null ? 'btn-primary' : 'btn-secondary'} btn-sm wb-progress-btn" data-limit="all">
         All Lessons (${totalLessons}/${totalLessons})
@@ -490,24 +519,28 @@ export const HomeworkUI = {
         </button>
       `;
     }
+    if (hiddenCount > 0) {
+      btnHtml += `
+        <button type="button" class="btn btn-warning btn-sm btn-wb-unhide-all" id="btn-wb-unhide-all" style="font-weight:700;" title="Restore hidden lesson(s)">
+          Restore ${hiddenCount} Hidden
+        </button>
+      `;
+    }
     if (progressButtonsContainer) progressButtonsContainer.innerHTML = btnHtml;
 
     if (progressLabel) {
-      progressLabel.textContent = (this.coveredLessonLimit === null)
+      const baseLabel = (this.coveredLessonLimit === null)
         ? `Showing All ${totalLessons} Lessons`
         : `Showing Lessons 1 to ${this.coveredLessonLimit} of ${totalLessons}`;
+      progressLabel.textContent = hiddenCount > 0 ? `${baseLabel} (${hiddenCount} Hidden)` : baseLabel;
     }
 
     const wbGroupBtn = document.getElementById('btn-toggle-wb-grouping');
     if (wbGroupBtn) {
       const isLessonGrouping = (this.groupingMode === 'lesson');
-      wbGroupBtn.innerHTML = isLessonGrouping ? '📖 By Lesson' : '📂 By Category';
-      wbGroupBtn.title = isLessonGrouping ? 'Switch to Weekly Categories view' : 'Switch to By Lesson view';
+      wbGroupBtn.innerHTML = isLessonGrouping ? 'Lesson' : 'Category';
+      wbGroupBtn.title = isLessonGrouping ? 'Switch to Category view' : 'Switch to Lesson view';
     }
-
-    const visibleEntries = (this.coveredLessonLimit === null)
-      ? scheduledEntries
-      : scheduledEntries.slice(0, this.coveredLessonLimit);
 
     // Lesson Grouping Display Mode
     if (this.groupingMode === 'lesson') {
@@ -516,13 +549,14 @@ export const HomeworkUI = {
       const isBubbleLayout = (this.whiteboardLayoutMode !== 'list');
       let wbHtml = `<div class="whiteboard-cards-grid ${isBubbleLayout ? 'layout-bubbles' : 'layout-list'}">`;
 
-      visibleEntries.forEach((entry, idx) => {
+      const cardsData = visibleEntries.map(entry => {
         const { slot, lesson, classObj } = entry;
         const classworkItems = this.getFormattedClassworkForLesson(lesson);
 
         const days = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
         const dayName = days[slot.dayOfWeek] || '';
-        const lessonDisplayTitle = `Lesson ${idx + 1}`;
+        const lessonNumber = entry.weekLessonIndex || (scheduledEntries.indexOf(entry) + 1);
+        const lessonDisplayTitle = `Lesson ${lessonNumber}`;
 
         const lessonGrouped = {};
         classworkItems.forEach(item => {
@@ -537,11 +571,33 @@ export const HomeworkUI = {
         });
 
         const catKeys = Object.keys(lessonGrouped);
+        const hasWork = catKeys.length > 0;
+        const isAssessment = this.isLessonAssessment(lesson);
+        const isCompact = !hasWork || isAssessment;
+        const cardClass = `whiteboard-card ${isCompact ? 'wb-card-compact' : ''} ${isAssessment ? 'wb-card-test' : ''} ${!hasWork && !isAssessment ? 'wb-card-no-tasks' : ''}`.trim();
         let cardBodyHtml = '';
 
-        if (catKeys.length === 0) {
-          cardBodyHtml = `<div style="font-size:0.95rem; color:#94a3b8; font-style:italic; padding:0.5rem 0;">No classwork tasks specified for this lesson.</div>`;
+        if (!hasWork) {
+          if (!isAssessment) {
+            anyTasksInWeek = true;
+            totalWorkItemsCount += 1;
+            cardBodyHtml = `
+              <div class="wb-compact-badge wb-catchup-badge">Catch Up</div>
+            `;
+          } else {
+            anyTasksInWeek = true;
+            const testTitle = (lesson.title && !lesson.title.toLowerCase().startsWith('lesson')) ? lesson.title : 'Test';
+            cardBodyHtml = `
+              <div class="wb-compact-badge wb-test-badge">${testTitle}</div>
+            `;
+          }
         } else {
+          anyTasksInWeek = true;
+          let testHeaderHtml = '';
+          if (isAssessment) {
+            const testTitle = (lesson.title && !lesson.title.toLowerCase().startsWith('lesson')) ? lesson.title : 'Test';
+            testHeaderHtml = `<div class="wb-compact-badge wb-test-badge" style="margin-bottom:calc(0.4rem * var(--wb-font-scale, 1));">${testTitle}</div>`;
+          }
           anyTasksInWeek = true;
           if (isBubbleLayout) {
             const bubbleGroups = catKeys.map(catKey => {
@@ -581,7 +637,7 @@ export const HomeworkUI = {
               `;
             }).join('');
 
-            cardBodyHtml = `<div class="whiteboard-items-flow">${bubbleGroups}</div>`;
+            cardBodyHtml = `${testHeaderHtml}<div class="whiteboard-items-flow">${bubbleGroups}</div>`;
           } else {
             let itemsListHtml = '';
             catKeys.forEach(catKey => {
@@ -617,25 +673,50 @@ export const HomeworkUI = {
               });
             });
 
-            cardBodyHtml = `<div>${itemsListHtml}</div>`;
+            cardBodyHtml = `${testHeaderHtml}<div>${itemsListHtml}</div>`;
           }
         }
 
-        wbHtml += `
-          <div class="whiteboard-card">
+        const cardHtml = `
+          <div class="${cardClass}">
+            <button type="button" class="wb-tile-hide-btn" data-lesson-id="${lesson.id}" title="Hide this lesson" aria-label="Hide lesson">✕</button>
             <div class="whiteboard-type-header">
-              <div style="display:flex; align-items:center; gap:0.5rem;" title="${lesson.title ? lesson.title.trim() : lessonDisplayTitle}">
-                <span>📖</span>
+              <div style="display:flex; align-items:center; gap:0.5rem; white-space:nowrap;" title="${lesson.title ? lesson.title.trim() : lessonDisplayTitle}">
                 <span>${lessonDisplayTitle}</span>
               </div>
-              <span class="wb-card-slot-badge" title="${TermManager.formatDisplayDate(slot.date)}">
-                ${dayName} ${slot.periodName}
-              </span>
+              <div style="display:flex; align-items:center; white-space:nowrap;">
+                <span class="wb-card-slot-badge" title="${TermManager.formatDisplayDate(slot.date)}">
+                  ${dayName} ${slot.periodName}
+                </span>
+              </div>
             </div>
             ${cardBodyHtml}
           </div>
         `;
+
+        return {
+          isCompact,
+          cardHtml
+        };
       });
+
+      let i = 0;
+      while (i < cardsData.length) {
+        const current = cardsData[i];
+        const next = cardsData[i + 1];
+        if (isBubbleLayout && current.isCompact && next && next.isCompact) {
+          wbHtml += `
+            <div class="wb-compact-stack">
+              ${current.cardHtml}
+              ${next.cardHtml}
+            </div>
+          `;
+          i += 2;
+        } else {
+          wbHtml += current.cardHtml;
+          i += 1;
+        }
+      }
 
       wbHtml += '</div>';
 
@@ -773,7 +854,6 @@ export const HomeworkUI = {
         <div class="whiteboard-card">
           <div class="whiteboard-type-header">
             <div style="display:flex; align-items:center; gap:0.5rem;">
-              <span>${icon}</span>
               <span>${typeKey}</span>
             </div>
           </div>
@@ -809,7 +889,21 @@ export const HomeworkUI = {
 
       entries.forEach((entry, idx) => {
         const items = this.getFormattedClassworkForLesson(entry.lesson);
-        if (items.length === 0) return;
+        const hasWork = items.some(it => it && it.work && it.work.trim());
+        const isAssessment = this.isLessonAssessment(entry.lesson);
+
+        // Strict lesson numbering with lesson titles removed: Lesson 1, Lesson 2, etc.
+        const headerText = `Lesson ${idx + 1}`;
+
+        if (!hasWork) {
+          totalTasksCount++;
+          if (isAssessment) {
+            lessonBlocks.push(`${headerText}\nTest`);
+          } else {
+            lessonBlocks.push(`${headerText}\nCatch Up`);
+          }
+          return;
+        }
 
         const groupedForLesson = {};
         items.forEach(item => {
@@ -831,18 +925,21 @@ export const HomeworkUI = {
         });
 
         const catKeys = Object.keys(groupedForLesson);
-        if (catKeys.length === 0) return;
+        if (catKeys.length === 0) {
+          totalTasksCount++;
+          if (isAssessment) {
+            lessonBlocks.push(`${headerText}\nTest`);
+          } else {
+            lessonBlocks.push(`${headerText}\nCatch Up`);
+          }
+          return;
+        }
         totalTasksCount += catKeys.length;
-
-        const cleanTitle = (entry.lesson && entry.lesson.title && entry.lesson.title.trim().toLowerCase() !== `lesson ${idx + 1}`)
-          ? entry.lesson.title.replace(/^Lesson\s*\d+\s*[-:]?\s*/i, '').replace(/^\d+[\.\:\-\s]+/, '').trim()
-          : '';
-        const headerText = cleanTitle ? `Lesson ${idx + 1} - ${cleanTitle}` : `Lesson ${idx + 1}`;
 
         const blockLines = [headerText];
         catKeys.forEach(cat => {
           const aggWorks = this.aggregateTaskItems(groupedForLesson[cat]);
-          blockLines.push(`${cat} - ${aggWorks.join(', ')}`);
+          blockLines.push(`${cat} - ${aggWorks.join(' | ')}`);
         });
 
         lessonBlocks.push(blockLines.join('\n'));
@@ -956,7 +1053,21 @@ export const HomeworkUI = {
 
       entries.forEach((entry, idx) => {
         const items = this.getFormattedClassworkForLesson(entry.lesson);
-        if (items.length === 0) return;
+        const hasWork = items.some(it => it && it.work && it.work.trim());
+        const isAssessment = this.isLessonAssessment(entry.lesson);
+
+        // Strict lesson numbering with lesson titles removed: Lesson 1, Lesson 2, etc.
+        const headerText = `Lesson ${idx + 1}`;
+
+        if (!hasWork) {
+          totalTasksCount++;
+          let blockHtml = `<div style="margin-top: 0.65rem; margin-bottom: 0.65rem;">`;
+          blockHtml += `<div style="font-weight: 700; font-size: 1.02em; margin-bottom: 0.25rem;">${headerText}</div>`;
+          blockHtml += `<div style="margin-bottom: 0.2rem; padding-left: 0.25rem;">${isAssessment ? 'Test' : 'Catch Up'}</div>`;
+          blockHtml += `</div>`;
+          lessonBlocksHtml.push(blockHtml);
+          return;
+        }
 
         const groupedForLesson = {};
         items.forEach(item => {
@@ -978,13 +1089,16 @@ export const HomeworkUI = {
         });
 
         const catKeys = Object.keys(groupedForLesson);
-        if (catKeys.length === 0) return;
+        if (catKeys.length === 0) {
+          totalTasksCount++;
+          let blockHtml = `<div style="margin-top: 0.65rem; margin-bottom: 0.65rem;">`;
+          blockHtml += `<div style="font-weight: 700; font-size: 1.02em; margin-bottom: 0.25rem;">${headerText}</div>`;
+          blockHtml += `<div style="margin-bottom: 0.2rem; padding-left: 0.25rem;">${isAssessment ? 'Test' : 'Catch Up'}</div>`;
+          blockHtml += `</div>`;
+          lessonBlocksHtml.push(blockHtml);
+          return;
+        }
         totalTasksCount += catKeys.length;
-
-        const cleanTitle = (entry.lesson && entry.lesson.title && entry.lesson.title.trim().toLowerCase() !== `lesson ${idx + 1}`)
-          ? entry.lesson.title.replace(/^Lesson\s*\d+\s*[-:]?\s*/i, '').replace(/^\d+[\.\:\-\s]+/, '').trim()
-          : '';
-        const headerText = cleanTitle ? `Lesson ${idx + 1} - ${cleanTitle}` : `Lesson ${idx + 1}`;
 
         let blockHtml = `<div style="margin-top: 0.65rem; margin-bottom: 0.65rem;">`;
         blockHtml += `<div style="font-weight: 700; font-size: 1.02em; margin-bottom: 0.25rem;">${headerText}</div>`;
@@ -1009,7 +1123,7 @@ export const HomeworkUI = {
                 return it.work;
               }).join(', ');
             }
-          }).join(', ');
+          }).join(' | ');
 
           blockHtml += `<div style="margin-bottom: 0.2rem; padding-left: 0.25rem;"><strong>${cat}</strong> - ${tasksFormatted}</div>`;
         });
@@ -1190,24 +1304,19 @@ export const HomeworkUI = {
         this.selectedClassId = btn.getAttribute('data-id');
         this.renderClassSelector();
         this.renderMainContent();
-      }
-    });
-
-    // Select all summary text handler
-    document.addEventListener('click', (e) => {
-      const selectBtn = e.target.closest('#btn-select-summary-text');
-      if (selectBtn) {
-        const box = document.getElementById('homework-summary-markdown-box');
-        if (box) {
-          const range = document.createRange();
-          range.selectNodeContents(box);
-          const sel = window.getSelection();
-          sel.removeAllRanges();
-          sel.addRange(range);
-          if (window.showToastNotification) window.showToastNotification('🔍 Text selected! Press Ctrl+C to copy.');
+        if (typeof ClassTimer !== 'undefined') {
+          ClassTimer.selectedClassId = this.selectedClassId;
+          if (ClassTimer.activeSchedule && !ClassTimer.isPinned) {
+            ClassTimer.activeSchedule = null;
+            ClassTimer.updateDOM();
+          } else {
+            ClassTimer.updateDOM();
+          }
         }
       }
     });
+
+
 
     // Font zoom & layout/grouping toggle buttons handler
     document.addEventListener('click', (e) => {
@@ -1234,17 +1343,15 @@ export const HomeworkUI = {
       }
     });
 
-    // Click on homework lesson card or Edit button to open Lesson Plan Edit modal
+    // Click on homework lesson card to open Lesson Plan Edit modal
     document.addEventListener('click', (e) => {
       if (e.target.closest('.hw-card-sync-btn')) return;
 
-      const editBtn = e.target.closest('.btn-edit-homework-lesson');
       const card = e.target.closest('.homework-lesson-card');
 
-      if ((editBtn || card) && !e.target.closest('a')) {
-        const targetEl = editBtn || card;
-        const classId = targetEl.getAttribute('data-class');
-        const lessonId = targetEl.getAttribute('data-lesson-id');
+      if (card && !e.target.closest('a')) {
+        const classId = card.getAttribute('data-class');
+        const lessonId = card.getAttribute('data-lesson-id');
         if (classId && lessonId) {
           const classObj = state.classes.find(c => c.id === classId);
           const lessons = state.lessonPlans[classId] || [];
@@ -1296,6 +1403,16 @@ export const HomeworkUI = {
       });
     }
 
+    document.addEventListener('click', (e) => {
+      const exitBtn = e.target.closest('#btn-exit-whiteboard') || e.target.closest('#modal-whiteboard-backdrop .modal-close');
+      const backdrop = document.getElementById('modal-whiteboard-backdrop');
+      if (exitBtn || (e.target === backdrop && backdrop && backdrop.classList.contains('active'))) {
+        if (typeof ClassTimer !== 'undefined' && ClassTimer.onExitWhiteboardView) {
+          ClassTimer.onExitWhiteboardView();
+        }
+      }
+    });
+
     const fsBtn = document.getElementById('btn-fullscreen-whiteboard');
     if (fsBtn) {
       fsBtn.addEventListener('click', () => {
@@ -1310,11 +1427,35 @@ export const HomeworkUI = {
       });
     }
 
+    // Whiteboard hide tile & restore buttons handler
+    document.addEventListener('click', (e) => {
+      const hideBtn = e.target.closest('.wb-tile-hide-btn');
+      if (hideBtn) {
+        e.stopPropagation();
+        const lessonId = hideBtn.getAttribute('data-lesson-id');
+        if (lessonId) {
+          this.hiddenLessonIds = this.hiddenLessonIds || new Set();
+          this.hiddenLessonIds.add(lessonId);
+          this.renderWhiteboardContent();
+        }
+      }
+
+      const unhideBtn = e.target.closest('#btn-wb-unhide-all, .btn-wb-unhide-all');
+      if (unhideBtn) {
+        e.stopPropagation();
+        if (this.hiddenLessonIds) this.hiddenLessonIds.clear();
+        this.renderWhiteboardContent();
+      }
+    });
+
     document.addEventListener('click', (e) => {
       const limitBtn = e.target.closest('.wb-progress-btn');
       if (limitBtn) {
         const limitVal = limitBtn.getAttribute('data-limit');
         this.coveredLessonLimit = (limitVal === 'all') ? null : parseInt(limitVal, 10);
+        if (limitVal === 'all' && this.hiddenLessonIds) {
+          this.hiddenLessonIds.clear();
+        }
         this.renderWhiteboardContent();
       }
     });

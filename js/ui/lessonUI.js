@@ -151,7 +151,7 @@ export const LessonUI = {
             <div class="lesson-num">${idx + 1}</div>
             <div class="lesson-details">
               <div class="lesson-title">${lesson.title}</div>
-              <div class="lesson-unit">📂 ${lesson.unit || 'General Curriculum'} ${tagsHtml}</div>
+              <div class="lesson-unit">${lesson.unit || 'General Curriculum'} ${tagsHtml}</div>
             </div>
           </div>
           <div class="lesson-actions">
@@ -272,3 +272,125 @@ export const LessonUI = {
     backdrop.classList.add('active');
   }
 };
+
+export const LessonViewer = {
+  currentLessonData: null,
+
+  open(lesson, classObj, slotInfo = null) {
+    this.currentLessonData = { lesson, classObj, slotInfo };
+    const backdrop = document.getElementById('modal-view-lesson-backdrop');
+    const body = document.getElementById('view-lesson-modal-body');
+    if (!backdrop || !body) return;
+
+    let tagsHtml = '';
+    if (lesson.isPinned) tagsHtml += `<span class="tag tag-pinned" data-class="${classObj ? classObj.id : ''}" data-id="${lesson.id}" style="cursor:pointer;" title="Click to unpin">📌 Pinned: ${TermManager.formatDisplayDate(lesson.pinnedDate)} ✕</span> `;
+    if (lesson.isRevision) tagsHtml += `<span class="tag tag-revision">⭐ Revision</span> `;
+    if (lesson.isMerged) tagsHtml += `<span class="tag tag-merged">🔀 Merged</span> `;
+    if (lesson.isTestMilestone) tagsHtml += `<span class="tag tag-test">🎯 Test: ${lesson.testDate || 'Set Date'}</span> `;
+
+    let slotMeta = '';
+    if (slotInfo) {
+      slotMeta = `<div>📅 <strong>Scheduled Slot:</strong> ${slotInfo.termName} • ${TermManager.formatDisplayDate(slotInfo.date)} (${slotInfo.periodName})</div>`;
+    }
+
+    let classworkHtml = '';
+    if (lesson.classwork && Array.isArray(lesson.classwork) && lesson.classwork.length > 0) {
+      classworkHtml = `
+        <div style="margin-top:0.75rem; padding:0.75rem; background:rgba(59, 130, 246, 0.1); border:1px solid rgba(59, 130, 246, 0.3); border-radius:var(--radius-sm);">
+          <strong style="color:#93c5fd; font-size:0.85rem; display:block; margin-bottom:0.4rem;">📚 Classwork Tasks:</strong>
+          ${lesson.classwork.map(cw => `
+            <div style="font-size:0.85rem; margin-bottom:0.3rem;">
+              <span class="cw-badge cw-badge-default">${cw.type || 'Task'}</span>
+              <strong>${cw.work || ''}</strong>
+              ${cw.link ? `<a href="${cw.link}" target="_blank" class="cw-link-icon">🔗 Material Link</a>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    const modalCellStyle = classObj && typeof getClassCellStyles === 'function' ? getClassCellStyles(classObj.color, state.theme === 'dark') : { textColor: 'var(--text-main)', dotBg: classObj ? classObj.color : '#3b82f6', dotBorder: 'none' };
+    const classMetaHtml = classObj ? `
+      <div style="color:${modalCellStyle.textColor}; font-weight:700; display:flex; align-items:center; gap:5px;">
+        <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${modalCellStyle.dotBg}; border:${modalCellStyle.dotBorder};"></span>
+        <span>${classObj.name}</span>
+      </div>` : '';
+
+    body.innerHTML = `
+      <h3 style="font-size:1.2rem; font-weight:800; margin-bottom:0.4rem; color:var(--text-main);">${lesson.title}</h3>
+      <div class="lesson-view-meta">
+        ${classMetaHtml}
+        <div>${lesson.unit || 'General Curriculum'}</div>
+        ${slotMeta}
+        <div style="margin-top:0.35rem;">${tagsHtml}</div>
+      </div>
+      ${classworkHtml}
+      <div class="lesson-view-content-box" style="margin-top:0.75rem;">
+        ${lesson.content ? lesson.content.replace(/\n/g, '<br>') : '<div style="color:var(--text-dim); font-style:italic;">No detailed teaching notes added for this lesson plan. Click "Edit" to add details!</div>'}
+      </div>
+    `;
+
+    const pinBtn = document.getElementById('btn-viewer-toggle-pin');
+    if (pinBtn) {
+      pinBtn.textContent = lesson.isPinned ? '📌 Unpin Lesson' : '📌 Pin to Slot';
+      pinBtn.onclick = () => {
+        const targetD = slotInfo ? slotInfo.date : (lesson.pinnedDate || null);
+        const targetP = slotInfo ? slotInfo.periodId : (lesson.pinnedPeriodId || null);
+        state.toggleLessonPin(classObj.id, lesson.id, targetD, targetP);
+        backdrop.classList.remove('active');
+      };
+    }
+
+    const editBtn = document.getElementById('btn-viewer-edit-lesson');
+    if (editBtn) {
+      editBtn.onclick = () => {
+        backdrop.classList.remove('active');
+        if (classObj) LessonUI.selectedClassId = classObj.id;
+        LessonUI.openEditLessonModal(lesson.id);
+      };
+    }
+
+    backdrop.classList.add('active');
+  },
+
+  copyToClipboard() {
+    if (!this.currentLessonData) return;
+    const { lesson, classObj, slotInfo } = this.currentLessonData;
+    let text = `LESSON PLAN: ${lesson.title}\n`;
+    text += `Class: ${classObj ? classObj.name : ''}\n`;
+    text += `Unit: ${lesson.unit || 'General Curriculum'}\n`;
+    if (slotInfo) {
+      text += `Date/Period: ${slotInfo.termName} - ${TermManager.formatDisplayDate(slotInfo.date)} (${slotInfo.periodName})\n`;
+    }
+
+    if (lesson.classwork && Array.isArray(lesson.classwork) && lesson.classwork.length > 0) {
+      text += `\nCLASSWORK TASKS:\n`;
+      lesson.classwork.forEach(cw => {
+        text += `- [${cw.type || 'Task'}]: ${cw.work}${cw.link ? ` (${cw.link})` : ''}\n`;
+      });
+    }
+
+    if (lesson.content) {
+      const cleanContent = lesson.content.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
+      text += `\nDETAILS / NOTES:\n${cleanContent}\n`;
+    }
+
+    navigator.clipboard.writeText(text).then(() => {
+      const copyBtn = document.getElementById('btn-copy-lesson-details');
+      if (copyBtn) {
+        const origText = copyBtn.textContent;
+        copyBtn.textContent = '✅ Copied to Clipboard!';
+        setTimeout(() => {
+          copyBtn.textContent = origText;
+        }, 2000);
+      }
+    }).catch(() => {
+      alert('Copied lesson details to clipboard!');
+    });
+  }
+};
+
+if (typeof window !== 'undefined') {
+  window.LessonUI = LessonUI;
+  window.LessonViewer = LessonViewer;
+}
