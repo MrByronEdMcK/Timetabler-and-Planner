@@ -4805,9 +4805,11 @@
       const expandWrapper = document.getElementById('wb-bar-expand-wrapper');
       if (bar) {
         bar.classList.toggle('collapsed', this.isProgressBarCollapsed);
+        bar.style.display = this.isProgressBarCollapsed ? 'none' : '';
       }
       if (expandWrapper) {
         expandWrapper.classList.toggle('hidden', !this.isProgressBarCollapsed);
+        expandWrapper.style.display = this.isProgressBarCollapsed ? 'block' : 'none';
       }
     },
 
