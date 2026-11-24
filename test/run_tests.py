@@ -1560,6 +1560,23 @@ def run():
     runner.assert_true("e.key === '?'" in help_code, "js/help.js binds '?' global shortcut to open help")
     runner.assert_true("e.key === 'Escape'" in help_code, "js/help.js binds Escape shortcut to close help")
 
+    # -------------------------------------------------------------------------
+    # TEST 32: Collapsible Progress Filter Bar & Compact 2-Row Timer Controls
+    # -------------------------------------------------------------------------
+    print("\nTest 32: Collapsible Progress Filter Bar & Compact 2-Row Timer Controls")
+    runner.assert_true('id="btn-wb-collapse-bar"' in idx_html, 'index.html includes #btn-wb-collapse-bar up-arrow button in bottom-right of Progress Filter bar')
+    runner.assert_true('id="btn-wb-expand-bar"' in idx_html, 'index.html includes #btn-wb-expand-bar button to restore hidden Progress Filter bar')
+    runner.assert_true('.whiteboard-bar.collapsed' in main_css, 'css/main.css defines .whiteboard-bar.collapsed rule')
+    runner.assert_true('.wb-bar-collapse-btn' in main_css, 'css/main.css defines .wb-bar-collapse-btn positioned in bottom-right corner')
+    runner.assert_true('.wb-bar-expand-btn' in main_css, 'css/main.css defines .wb-bar-expand-btn pull-down restore tab')
+    runner.assert_true('.wb-timer-ctrl-item' in main_css, 'css/main.css defines .wb-timer-ctrl-item for compact 2-row timer settings box')
+    runner.assert_true('padding-top: 0.25rem' in main_css, 'css/main.css compacts .whiteboard-footer top padding to sit just above speech bubble indicator')
+
+    for code, name in [(hw_code, 'js/ui/homeworkUI.js'), (app_code, 'js/app.js')]:
+        runner.assert_true('toggleProgressBar(' in code, f'{name} implements toggleProgressBar method')
+        runner.assert_true('btn-wb-collapse-bar' in code, f'{name} binds click handler for collapsing Progress Filter bar')
+        runner.assert_true('btn-wb-expand-bar' in code, f'{name} binds click handler for expanding Progress Filter bar')
+
     print('\n==================================================')
     print(f'Test Results: {runner.passes} PASSED, {runner.fails} FAILED')
     print('==================================================\n')

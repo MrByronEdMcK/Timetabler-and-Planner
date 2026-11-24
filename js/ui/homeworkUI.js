@@ -16,6 +16,19 @@ export const HomeworkUI = {
   whiteboardFontScale: 1.0,
   isManualFontScale: false,
   whiteboardLayoutMode: 'bubbles', // 'bubbles' | 'list'
+  isProgressBarCollapsed: false,
+
+  toggleProgressBar(forceCollapsed = null) {
+    this.isProgressBarCollapsed = (forceCollapsed !== null) ? Boolean(forceCollapsed) : !this.isProgressBarCollapsed;
+    const bar = document.getElementById('whiteboard-progress-bar') || document.querySelector('.whiteboard-bar');
+    const expandWrapper = document.getElementById('wb-bar-expand-wrapper');
+    if (bar) {
+      bar.classList.toggle('collapsed', this.isProgressBarCollapsed);
+    }
+    if (expandWrapper) {
+      expandWrapper.classList.toggle('hidden', !this.isProgressBarCollapsed);
+    }
+  },
 
   get groupingMode() {
     return state.homeworkGroupingMode || 'category';
@@ -1331,6 +1344,10 @@ export const HomeworkUI = {
       } else if (e.target.id === 'btn-wb-zoom-auto' || e.target.closest('#btn-wb-zoom-auto')) {
         this.isManualFontScale = false;
         this.renderWhiteboardContent();
+      } else if (e.target.id === 'btn-wb-collapse-bar' || e.target.closest('#btn-wb-collapse-bar')) {
+        this.toggleProgressBar(true);
+      } else if (e.target.id === 'btn-wb-expand-bar' || e.target.closest('#btn-wb-expand-bar')) {
+        this.toggleProgressBar(false);
       }
     });
 

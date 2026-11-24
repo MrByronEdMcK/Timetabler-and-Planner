@@ -1423,8 +1423,9 @@ textarea:focus {
 }
 
 .whiteboard-bar {
+  position: relative;
   background: var(--bg-surface);
-  padding: 0.85rem 1.25rem;
+  padding: 0.85rem 2.35rem 0.85rem 1.25rem;
   border-radius: var(--radius-md);
   margin: 1rem 0;
   display: flex;
@@ -1434,6 +1435,72 @@ textarea:focus {
   gap: 1rem;
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
+}
+
+.whiteboard-bar.collapsed {
+  display: none !important;
+}
+
+.wb-bar-collapse-btn {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: all 0.15s ease;
+}
+
+.wb-bar-collapse-btn:hover {
+  opacity: 1;
+  color: var(--primary);
+  background: var(--bg-subtle);
+  border-color: var(--border-color);
+}
+
+.wb-bar-expand-wrapper {
+  position: relative;
+  height: 0;
+  overflow: visible;
+  z-index: 25;
+}
+
+.wb-bar-expand-wrapper.hidden {
+  display: none !important;
+}
+
+.wb-bar-expand-btn {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wb-bar-expand-btn:hover {
+  color: var(--primary);
+  background: var(--bg-subtle);
 }
 
 .whiteboard-bar-title {
@@ -1460,7 +1527,7 @@ textarea:focus {
   justify-content: space-between;
   align-items: flex-end;
   border-top: 1px solid var(--border-color);
-  padding-top: 0.85rem;
+  padding-top: 0.25rem;
   margin-top: auto;
   gap: 1.25rem;
   flex-wrap: nowrap;
@@ -1852,19 +1919,18 @@ body[data-theme="dark"] .wb-timeline-end-edit-label:hover {
   font-style: italic;
 }
 
-/* Vertical Break Controls Placed on the Right - Compact & Vertical */
+/* Vertical Break Controls Placed on the Right - Compact 2-Row Layout */
 .wb-timer-controls {
   display: flex;
   flex-direction: column;
   gap: 0.28rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
-  padding: 0.35rem 0.5rem;
+  padding: 0.32rem 0.5rem;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   flex-shrink: 0;
-  width: 172px;
-  max-width: 172px;
+  width: auto;
   box-sizing: border-box;
 }
 
@@ -1872,10 +1938,16 @@ body[data-theme="dark"] .wb-timeline-end-edit-label:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.35rem;
+  gap: 0.65rem;
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--text-muted);
+}
+
+.wb-timer-ctrl-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .wb-timer-stepper {

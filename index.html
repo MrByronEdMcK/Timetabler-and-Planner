@@ -671,7 +671,7 @@
       </div>
 
       <!-- Whiteboard Lesson Progress Selector -->
-      <div class="whiteboard-bar">
+      <div class="whiteboard-bar" id="whiteboard-progress-bar">
         <div style="display:flex; align-items:center; gap:0.75rem;">
           <span class="whiteboard-bar-title">Progress Filter (Lessons Taught):</span>
           <span id="whiteboard-progress-label" class="whiteboard-bar-label">All Lessons</span>
@@ -679,6 +679,15 @@
         <div id="whiteboard-progress-buttons" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
           <!-- Rendered dynamically -->
         </div>
+        <button type="button" class="wb-bar-collapse-btn" id="btn-wb-collapse-bar" title="Hide Progress Filter bar" aria-label="Hide Progress Filter bar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+        </button>
+      </div>
+      <div class="wb-bar-expand-wrapper hidden" id="wb-bar-expand-wrapper">
+        <button type="button" class="wb-bar-expand-btn" id="btn-wb-expand-bar" title="Show Progress Filter bar" aria-label="Show Progress Filter bar">
+          <span>Progress Filter</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
       </div>
 
       <!-- Whiteboard Presentation Body -->
@@ -747,25 +756,25 @@
           <!-- Right: Compact Vertical Break Configuration Controls -->
           <div class="wb-timer-controls" id="wb-timer-controls">
             <div class="wb-timer-ctrl-row">
-              <label for="wb-input-breaks-count" title="Number of breaks placed in lesson">Breaks:</label>
-              <div class="wb-timer-stepper">
-                <button type="button" class="wb-stepper-btn" id="btn-timer-dec-breaks" title="Decrease breaks">−</button>
-                <input type="number" id="wb-input-breaks-count" min="0" max="5" value="1" readonly>
-                <button type="button" class="wb-stepper-btn" id="btn-timer-inc-breaks" title="Increase breaks">+</button>
+              <div class="wb-timer-ctrl-item">
+                <label for="wb-input-breaks-count" title="Number of breaks placed in lesson">Breaks:</label>
+                <div class="wb-timer-stepper">
+                  <button type="button" class="wb-stepper-btn" id="btn-timer-dec-breaks" title="Decrease breaks">−</button>
+                  <input type="number" id="wb-input-breaks-count" min="0" max="5" value="1" readonly>
+                  <button type="button" class="wb-stepper-btn" id="btn-timer-inc-breaks" title="Increase breaks">+</button>
+                </div>
               </div>
-            </div>
-            <div class="wb-timer-ctrl-row">
-              <label for="wb-select-break-dur" title="Duration of each break in minutes">Duration:</label>
-              <select id="wb-select-break-dur" class="wb-timer-select" title="Break duration in minutes">
-                <option value="3" selected>3 min</option>
-                <option value="5">5 min</option>
-              </select>
+              <div class="wb-timer-ctrl-item">
+                <label for="wb-select-break-dur" title="Duration of each break in minutes">Duration:</label>
+                <select id="wb-select-break-dur" class="wb-timer-select" title="Break duration in minutes">
+                  <option value="3" selected>3 min</option>
+                  <option value="5">5 min</option>
+                </select>
+              </div>
             </div>
             <div class="wb-timer-btn-row">
               <button type="button" class="btn btn-secondary btn-xs" id="btn-timer-respace" title="Evenly re-distribute breaks across remaining time">Re-space</button>
               <button type="button" class="btn btn-secondary btn-xs" id="btn-timer-pin" title="Pin this timer so it keeps running in the background without resetting">Pin</button>
-            </div>
-            <div class="wb-timer-btn-row">
               <button type="button" class="btn btn-secondary btn-xs" id="btn-timer-hide" title="Hide and mute class timer">Hide</button>
               <button type="button" class="btn btn-secondary btn-xs" id="btn-timer-remove" title="Remove class timer">Remove</button>
               <button type="button" class="btn btn-secondary btn-xs" id="btn-timer-chime-toggle" title="Toggle audio chime alert on Work/Break transitions">🔔</button>
