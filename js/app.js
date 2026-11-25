@@ -2651,8 +2651,7 @@
             const cellStyle = getClassCellStyles(c.color, state.theme === 'dark');
             return `
             <button type="button" class="copy-unit-target-btn" data-unit="${group.unitName}" data-target-id="${c.id}" 
-                    style="width:100%; text-align:left; background:transparent; border:none; padding:0.45rem 0.75rem; font-size:0.78rem; color:var(--text-main); font-weight:600; display:flex; align-items:center; gap:0.5rem; cursor:pointer; border-radius:4px; transition:background 0.15s ease;"
-                    onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">
+                    style="width:100%; text-align:left; background:transparent; border:none; padding:0.45rem 0.75rem; font-size:0.78rem; color:var(--text-main); font-weight:600; display:flex; align-items:center; gap:0.5rem; cursor:pointer; border-radius:4px; transition:background 0.15s ease;">
               <span style="width:10px; height:10px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder}; flex-shrink:0;"></span>
               <span>${c.name}</span>
             </button>
@@ -2669,9 +2668,10 @@
                 <span class="topic-count-badge">${count} ${count === 1 ? 'Lesson' : 'Lessons'} (${numLabel})</span>
               </div>
               <div style="display:flex; align-items:center; gap:0.5rem;">
+                <button type="button" class="btn btn-secondary btn-xs export-unit-btn" data-unit="${group.unitName}" title="Export this unit (${group.unitName}) to a JSON file" style="font-size:0.72rem; padding:0.15rem 0.5rem; line-height:1.2; font-weight:600;">📤 Export Unit</button>
                 <div class="copy-unit-wrapper" style="position:relative; display:inline-block;">
                   <button type="button" class="btn btn-secondary btn-xs copy-unit-btn" data-unit="${group.unitName}" title="Copy all lessons in this unit to another class" style="font-size:0.72rem; padding:0.15rem 0.5rem; line-height:1.2; font-weight:600;">📋 Copy Unit to Class ▼</button>
-                  <div class="copy-unit-dropdown" style="display:none; position:absolute; right:0; top:100%; margin-top:4px; background:#0f172a !important; opacity:1 !important; border:1px solid var(--border-color); border-radius:var(--radius-md); box-shadow:0 12px 30px rgba(0,0,0,0.85); z-index:500; min-width:190px; padding:0.35rem 0;">
+                  <div class="copy-unit-dropdown" style="display:none; position:absolute; right:0; top:100%; margin-top:4px; background:var(--bg-surface); opacity:1; border:1px solid var(--border-color); border-radius:var(--radius-md); box-shadow:var(--shadow-xl); z-index:500; min-width:190px; padding:0.35rem 0;">
                     <div style="font-size:0.72rem; font-weight:700; color:var(--text-muted); padding:0.35rem 0.75rem; border-bottom:1px solid var(--border-color); margin-bottom:0.2rem;">Copy Unit to Class:</div>
                     ${copyMenuHtml}
                   </div>
@@ -2755,6 +2755,17 @@
       });
 
       container.addEventListener('click', (e) => {
+        const exportUnitBtn = e.target.closest('.export-unit-btn');
+        if (exportUnitBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          const unitName = exportUnitBtn.getAttribute('data-unit');
+          if (unitName) {
+            this.exportSingleUnitDirect(this.selectedClassId, unitName);
+          }
+          return;
+        }
+
         const copyBtn = e.target.closest('.copy-unit-btn');
         if (copyBtn) {
           e.preventDefault();
@@ -2844,7 +2855,7 @@
       const headers = container.querySelectorAll('.topic-group-header');
       headers.forEach(header => {
         header.addEventListener('click', (e) => {
-          if (e.target.closest('.copy-unit-btn')) return;
+          if (e.target.closest('.copy-unit-btn') || e.target.closest('.copy-unit-dropdown') || e.target.closest('.export-unit-btn')) return;
           const key = header.getAttribute('data-topic-key');
           this.collapsedTopics[key] = !this.collapsedTopics[key];
           this.renderLessonList();
@@ -3228,6 +3239,624 @@
       }
     },
 
+    // =========================================================================
+    // Curriculum & Unit Export / Import (Across Devices & Academic Years)
+    // =========================================================================
+    importedCurriculumPayload: null,
+    importedBackupFullState: null,
+
+    getOrderedUnitsForLessons(lessons = []) {
+      const unitMap = new Map();
+      lessons.forEach(lesson => {
+        const uName = (lesson.unit || 'General Curriculum').trim();
+        if (!unitMap.has(uName)) {
+          unitMap.set(uName, []);
+        }
+        unitMap.get(uName).push(lesson);
+      });
+      return Array.from(unitMap.entries()).map(([unitName, unitLessons]) => ({
+        unitName,
+        lessons: unitLessons
+      }));
+    },
+
+    buildCurriculumExportPayload(classId, selectedUnits = null, options = { classwork: true, content: true, tags: true, dates: false }) {
+      const classObj = state.classes.find(c => c.id === classId);
+      const rawLessons = state.lessonPlans[classId] || [];
+      const unitFilter = selectedUnits ? new Set(selectedUnits) : null;
+
+      const filteredLessons = rawLessons
+        .filter(l => {
+          const uName = (l.unit || 'General Curriculum').trim();
+          return !unitFilter || unitFilter.has(uName);
+        })
+        .map(l => {
+          const cleanCw = options.classwork && Array.isArray(l.classwork)
+            ? l.classwork
+                .filter(cw => cw && ((cw.work && cw.work.trim()) || (cw.link && cw.link.trim())))
+                .map(cw => ({
+                  type: (cw.type || 'Task').trim(),
+                  work: (cw.work || '').trim(),
+                  link: (cw.link || '').trim()
+                }))
+            : [];
+
+          const exportedLesson = {
+            title: l.title || 'Untitled Lesson',
+            unit: (l.unit || 'General Curriculum').trim(),
+            content: options.content ? (l.content || '') : '',
+            classwork: cleanCw,
+            isFloat: options.tags ? Boolean(l.isFloat) : false,
+            isRevision: options.tags ? Boolean(l.isRevision) : false,
+            isTestMilestone: options.tags ? Boolean(l.isTestMilestone) : false
+          };
+
+          if (options.dates) {
+            if (l.isTestMilestone) {
+              exportedLesson.testSlotKey = l.testSlotKey || null;
+              exportedLesson.testDate = l.testDate || null;
+              exportedLesson.testPeriodId = l.testPeriodId || null;
+            }
+            if (l.isPinned) {
+              exportedLesson.isPinned = true;
+              exportedLesson.pinnedSlotKey = l.pinnedSlotKey || null;
+              exportedLesson.pinnedDate = l.pinnedDate || null;
+              exportedLesson.pinnedPeriodId = l.pinnedPeriodId || null;
+            }
+          }
+          return exportedLesson;
+        });
+
+      const exportedUnits = [...new Set(filteredLessons.map(l => l.unit))];
+
+      return {
+        format: 'timetabler_curriculum_v1',
+        exportedAt: new Date().toISOString(),
+        academicYear: state.academicYear,
+        classInfo: classObj ? {
+          name: classObj.name,
+          subject: classObj.subject || classObj.name,
+          color: classObj.color || '#3b82f6',
+          details: classObj.details || ''
+        } : { name: 'Exported Class', subject: 'General', color: '#3b82f6', details: '' },
+        units: exportedUnits,
+        lessonCount: filteredLessons.length,
+        lessons: filteredLessons
+      };
+    },
+
+    downloadCurriculumJSON(payload, filenameSuffix = '') {
+      const safeClass = (payload.classInfo?.name || 'Class').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const safeSuffix = filenameSuffix ? `_${filenameSuffix.replace(/[^a-zA-Z0-9_-]/g, '_')}` : '';
+      const filename = `Curriculum_${safeClass}${safeSuffix}_${state.academicYear}.json`;
+      const jsonStr = JSON.stringify(payload, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+
+    exportSingleUnitDirect(classId, unitName) {
+      if (!classId || !unitName) return;
+      const payload = this.buildCurriculumExportPayload(classId, [unitName], {
+        classwork: true,
+        content: true,
+        tags: true,
+        dates: false
+      });
+      this.downloadCurriculumJSON(payload, unitName);
+      if (typeof showToastNotification === 'function') {
+        showToastNotification(`📤 Exported unit "${unitName}" (${payload.lessonCount} lessons)`);
+      }
+    },
+
+    openCurriculumTransferModal(mode = 'export', preselectedUnit = null) {
+      if (!this.selectedClassId && state.classes.length > 0) {
+        this.selectedClassId = state.classes[0].id;
+      }
+      const backdrop = document.getElementById('modal-curriculum-transfer-backdrop');
+      if (!backdrop) return;
+
+      this.switchCurriculumTransferTab(mode);
+      this.populateExportCurriculumModal(this.selectedClassId, preselectedUnit);
+      this.populateImportCurriculumModal();
+      backdrop.classList.add('active');
+    },
+
+    switchCurriculumTransferTab(mode = 'export') {
+      const exportTab = document.getElementById('tab-curriculum-export');
+      const importTab = document.getElementById('tab-curriculum-import');
+      const exportPanel = document.getElementById('panel-curriculum-export');
+      const importPanel = document.getElementById('panel-curriculum-import');
+
+      if (mode === 'import') {
+        if (exportTab) exportTab.className = 'btn btn-secondary btn-sm';
+        if (importTab) importTab.className = 'btn btn-primary btn-sm';
+        if (exportPanel) exportPanel.style.display = 'none';
+        if (importPanel) importPanel.style.display = 'block';
+      } else {
+        if (exportTab) exportTab.className = 'btn btn-primary btn-sm';
+        if (importTab) importTab.className = 'btn btn-secondary btn-sm';
+        if (exportPanel) exportPanel.style.display = 'block';
+        if (importPanel) importPanel.style.display = 'none';
+      }
+    },
+
+    populateExportCurriculumModal(classId = null, preselectedUnit = null) {
+      const targetClassId = classId || this.selectedClassId || (state.classes[0] && state.classes[0].id);
+      const classSelect = document.getElementById('export-curriculum-class-select');
+      if (classSelect) {
+        if (state.classes.length === 0) {
+          classSelect.innerHTML = `<option value="">No classes available</option>`;
+        } else {
+          classSelect.innerHTML = state.classes.map(c => {
+            const count = (state.lessonPlans[c.id] || []).length;
+            const sel = c.id === targetClassId ? 'selected' : '';
+            return `<option value="${c.id}" ${sel}>${c.name} (${count} Lessons)</option>`;
+          }).join('');
+        }
+      }
+      this.renderExportUnitsChecklist(targetClassId, preselectedUnit);
+    },
+
+    renderExportUnitsChecklist(classId, preselectedUnit = null) {
+      const checklist = document.getElementById('export-units-checklist');
+      if (!checklist) return;
+
+      const lessons = state.lessonPlans[classId] || [];
+      if (lessons.length === 0) {
+        checklist.innerHTML = `<div style="padding:0.75rem; color:var(--text-dim); font-size:0.82rem; text-align:center;">No lessons found in this class.</div>`;
+        return;
+      }
+
+      const units = this.getOrderedUnitsForLessons(lessons);
+      checklist.innerHTML = units.map((u) => {
+        const isChecked = preselectedUnit ? (u.unitName === preselectedUnit) : true;
+        const taskCount = u.lessons.reduce((acc, l) => {
+          const valid = Array.isArray(l.classwork) ? l.classwork.filter(cw => cw && ((cw.work && cw.work.trim()) || (cw.link && cw.link.trim()))).length : 0;
+          return acc + valid;
+        }, 0);
+        return `
+          <label style="display:flex; align-items:center; justify-content:space-between; padding:0.4rem 0.6rem; border-radius:4px; background:var(--bg-surface); border:1px solid var(--border-color); cursor:pointer; font-size:0.84rem; margin:0;">
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <input type="checkbox" class="chk-export-unit" value="${u.unitName.replace(/"/g, '&quot;')}" ${isChecked ? 'checked' : ''}>
+              <span style="font-weight:600; color:var(--text-main);">${u.unitName}</span>
+            </div>
+            <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">${u.lessons.length} Lesson${u.lessons.length !== 1 ? 's' : ''}${taskCount > 0 ? ` • ${taskCount} Task${taskCount !== 1 ? 's' : ''}` : ''}</span>
+          </label>
+        `;
+      }).join('');
+    },
+
+    executeCurriculumExportFromModal() {
+      const classSelect = document.getElementById('export-curriculum-class-select');
+      const classId = classSelect ? classSelect.value : this.selectedClassId;
+      if (!classId) {
+        alert('Please select a class to export.');
+        return;
+      }
+
+      const checkedBoxes = Array.from(document.querySelectorAll('#export-units-checklist .chk-export-unit:checked'));
+      if (checkedBoxes.length === 0) {
+        alert('Please select at least one unit to export.');
+        return;
+      }
+
+      const totalBoxes = document.querySelectorAll('#export-units-checklist .chk-export-unit').length;
+      const selectedUnits = checkedBoxes.map(cb => cb.value);
+
+      const options = {
+        classwork: document.getElementById('export-opt-classwork')?.checked ?? true,
+        content: document.getElementById('export-opt-content')?.checked ?? true,
+        tags: document.getElementById('export-opt-tags')?.checked ?? true,
+        dates: document.getElementById('export-opt-dates')?.checked ?? false
+      };
+
+      const payload = this.buildCurriculumExportPayload(classId, selectedUnits, options);
+      const suffix = (selectedUnits.length === 1 && totalBoxes > 1)
+        ? selectedUnits[0]
+        : (selectedUnits.length < totalBoxes ? `${selectedUnits.length}_Units` : 'Full_Curriculum');
+
+      this.downloadCurriculumJSON(payload, suffix);
+
+      const backdrop = document.getElementById('modal-curriculum-transfer-backdrop');
+      if (backdrop) backdrop.classList.remove('active');
+
+      if (typeof showToastNotification === 'function') {
+        showToastNotification(`📤 Exported ${payload.lessonCount} lessons (${selectedUnits.length} unit${selectedUnits.length !== 1 ? 's' : ''})`);
+      }
+    },
+
+    populateImportCurriculumModal() {
+      state.syncCurrentYearToYears();
+      const destYearLabel = document.getElementById('import-dest-year-label');
+      if (destYearLabel) destYearLabel.textContent = `${state.academicYear}`;
+
+      const destSelect = document.getElementById('import-dest-class-select');
+      const newClassWrap = document.getElementById('import-new-class-name-wrap');
+      if (destSelect) {
+        let opts = state.classes.map(c => {
+          const sel = c.id === this.selectedClassId ? 'selected' : '';
+          return `<option value="${c.id}" ${sel}>${c.name}</option>`;
+        }).join('');
+        opts += `<option value="__NEW_CLASS__">+ Create New Class...</option>`;
+        destSelect.innerHTML = opts;
+        if (state.classes.length === 0) {
+          destSelect.value = '__NEW_CLASS__';
+          if (newClassWrap) newClassWrap.style.display = 'block';
+        } else {
+          if (newClassWrap) newClassWrap.style.display = 'none';
+        }
+      }
+
+      // Populate Academic Years with saved lessonPlans
+      const yearSelect = document.getElementById('import-source-year-select');
+      if (yearSelect) {
+        const allYears = Object.keys(state.data.years || {}).sort((a, b) => Number(b) - Number(a));
+        const yearsWithClasses = allYears.filter(yr => {
+          const yData = state.data.years[yr];
+          return yData && Array.isArray(yData.classes) && yData.classes.length > 0;
+        });
+
+        if (yearsWithClasses.length === 0) {
+          yearSelect.innerHTML = `<option value="">No years with classes found</option>`;
+        } else {
+          // Prefer a year different from current year if available
+          const defaultSourceYr = yearsWithClasses.find(yr => Number(yr) !== Number(state.academicYear)) || yearsWithClasses[0];
+          yearSelect.innerHTML = yearsWithClasses.map(yr => {
+            const count = (state.data.years[yr]?.classes || []).length;
+            const sel = String(yr) === String(defaultSourceYr) ? 'selected' : '';
+            return `<option value="${yr}" ${sel}>${yr} (${count} Class${count !== 1 ? 'es' : ''})</option>`;
+          }).join('');
+        }
+        this.populateImportYearClasses();
+      }
+
+      const sourceTypeRadio = document.querySelector('input[name="import-curriculum-source-type"]:checked');
+      const sourceType = sourceTypeRadio ? sourceTypeRadio.value : 'file';
+      this.updateImportSourceVisibility(sourceType);
+    },
+
+    updateImportSourceVisibility(sourceType) {
+      const fileBox = document.getElementById('import-source-file-box');
+      const yearBox = document.getElementById('import-source-year-box');
+      if (sourceType === 'year') {
+        if (fileBox) fileBox.style.display = 'none';
+        if (yearBox) yearBox.style.display = 'block';
+        this.loadImportPreviewFromSelectedYearClass();
+      } else {
+        if (fileBox) fileBox.style.display = 'block';
+        if (yearBox) yearBox.style.display = 'none';
+        if (this.importedCurriculumPayload) {
+          this.renderImportUnitsPreview(this.importedCurriculumPayload);
+        } else {
+          const previewSec = document.getElementById('import-units-preview-section');
+          if (previewSec) previewSec.style.display = 'none';
+        }
+      }
+    },
+
+    populateImportYearClasses() {
+      const yearSelect = document.getElementById('import-source-year-select');
+      const classSelect = document.getElementById('import-source-year-class-select');
+      if (!yearSelect || !classSelect) return;
+
+      const yr = yearSelect.value;
+      const yData = (state.data.years && state.data.years[yr]) ? state.data.years[yr] : null;
+      if (!yData || !Array.isArray(yData.classes) || yData.classes.length === 0) {
+        classSelect.innerHTML = `<option value="">No classes in ${yr || 'selected year'}</option>`;
+        return;
+      }
+
+      classSelect.innerHTML = yData.classes.map(c => {
+        const lCount = ((yData.lessonPlans && yData.lessonPlans[c.id]) || []).length;
+        return `<option value="${c.id}">${c.name} (${lCount} Lessons)</option>`;
+      }).join('');
+
+      this.loadImportPreviewFromSelectedYearClass();
+    },
+
+    loadImportPreviewFromSelectedYearClass() {
+      const yearSelect = document.getElementById('import-source-year-select');
+      const classSelect = document.getElementById('import-source-year-class-select');
+      const previewSec = document.getElementById('import-units-preview-section');
+      if (!yearSelect || !classSelect) return;
+
+      const yr = yearSelect.value;
+      const cid = classSelect.value;
+      const yData = (state.data.years && state.data.years[yr]) ? state.data.years[yr] : null;
+      if (!yData || !cid) {
+        if (previewSec) previewSec.style.display = 'none';
+        return;
+      }
+
+      const classObj = (yData.classes || []).find(c => c.id === cid);
+      const lessons = (yData.lessonPlans && yData.lessonPlans[cid]) ? yData.lessonPlans[cid] : [];
+
+      const payload = {
+        format: 'timetabler_curriculum_v1',
+        academicYear: Number(yr),
+        classInfo: classObj ? {
+          name: classObj.name,
+          subject: classObj.subject || classObj.name,
+          color: classObj.color || '#3b82f6',
+          details: classObj.details || ''
+        } : { name: 'Class', subject: 'General', color: '#3b82f6', details: '' },
+        lessons: JSON.parse(JSON.stringify(lessons))
+      };
+
+      this.renderImportUnitsPreview(payload);
+    },
+
+    handleCurriculumFileUpload(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const parsed = JSON.parse(event.target.result);
+          const normalized = this.normalizeUploadedCurriculumJSON(parsed);
+          if (!normalized) {
+            alert('❌ Unrecognized JSON format. Please upload a Curriculum Export JSON or a Timetable Planner Backup JSON.');
+            return;
+          }
+          this.importedCurriculumPayload = normalized;
+          this.renderImportUnitsPreview(normalized);
+
+          // Pre-fill new class name if destination is __NEW_CLASS__
+          const newClassInput = document.getElementById('import-new-class-name-input');
+          if (newClassInput && !newClassInput.value.trim() && normalized.classInfo?.name) {
+            newClassInput.value = normalized.classInfo.name;
+          }
+        } catch (err) {
+          alert('❌ Could not parse JSON file.');
+        }
+      };
+      reader.readAsText(file);
+    },
+
+    normalizeUploadedCurriculumJSON(parsed) {
+      if (!parsed || typeof parsed !== 'object') return null;
+
+      // Case 1: Dedicated curriculum export format
+      if (parsed.format === 'timetabler_curriculum_v1' && Array.isArray(parsed.lessons)) {
+        return parsed;
+      }
+
+      // Case 2: Raw array of lessons
+      if (Array.isArray(parsed)) {
+        return {
+          format: 'timetabler_curriculum_v1',
+          classInfo: { name: 'Imported Class', subject: 'General', color: '#3b82f6', details: '' },
+          lessons: parsed
+        };
+      }
+
+      // Case 3: Full App Backup JSON (has lessonPlans and classes)
+      if (parsed.lessonPlans && typeof parsed.lessonPlans === 'object') {
+        const classesList = Array.isArray(parsed.classes) ? parsed.classes : [];
+        const allLessons = [];
+        Object.keys(parsed.lessonPlans).forEach(cid => {
+          const cObj = classesList.find(c => c.id === cid);
+          const cPrefix = (classesList.length > 1 && cObj) ? `[${cObj.name}] ` : '';
+          const cLessons = parsed.lessonPlans[cid] || [];
+          cLessons.forEach(l => {
+            const copy = JSON.parse(JSON.stringify(l));
+            copy.unit = `${cPrefix}${(copy.unit || 'General Curriculum').trim()}`;
+            allLessons.push(copy);
+          });
+        });
+        const firstClass = classesList[0] || { name: 'Backup Class', subject: 'General', color: '#3b82f6', details: '' };
+        return {
+          format: 'timetabler_curriculum_v1',
+          classInfo: firstClass,
+          lessons: allLessons
+        };
+      }
+
+      return null;
+    },
+
+    renderImportUnitsPreview(payload) {
+      const previewSec = document.getElementById('import-units-preview-section');
+      const checklist = document.getElementById('import-units-checklist');
+      const label = document.getElementById('import-units-preview-label');
+      if (!previewSec || !checklist) return;
+
+      previewSec.style.display = 'block';
+      const lessons = (payload && Array.isArray(payload.lessons)) ? payload.lessons : [];
+
+      if (label) {
+        const srcName = payload?.classInfo?.name ? `${payload.classInfo.name}` : 'Source';
+        const yrText = payload?.academicYear ? ` (${payload.academicYear})` : '';
+        label.textContent = `Units in ${srcName}${yrText} (${lessons.length} Total Lessons)`;
+      }
+
+      if (lessons.length === 0) {
+        checklist.innerHTML = `<div style="padding:0.75rem; color:var(--text-dim); font-size:0.82rem; text-align:center;">No lessons found in the selected source.</div>`;
+        return;
+      }
+
+      const units = this.getOrderedUnitsForLessons(lessons);
+      checklist.innerHTML = units.map(u => {
+        const taskCount = u.lessons.reduce((acc, l) => {
+          const valid = Array.isArray(l.classwork) ? l.classwork.filter(cw => cw && ((cw.work && cw.work.trim()) || (cw.link && cw.link.trim()))).length : 0;
+          return acc + valid;
+        }, 0);
+        return `
+          <label style="display:flex; align-items:center; justify-content:space-between; padding:0.4rem 0.6rem; border-radius:4px; background:var(--bg-surface); border:1px solid var(--border-color); cursor:pointer; font-size:0.84rem; margin:0;">
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <input type="checkbox" class="chk-import-unit" value="${u.unitName.replace(/"/g, '&quot;')}" checked>
+              <span style="font-weight:600; color:var(--text-main);">${u.unitName}</span>
+            </div>
+            <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">${u.lessons.length} Lesson${u.lessons.length !== 1 ? 's' : ''}${taskCount > 0 ? ` • ${taskCount} Task${taskCount !== 1 ? 's' : ''}` : ''}</span>
+          </label>
+        `;
+      }).join('');
+    },
+
+    executeCurriculumImportFromModal() {
+      const sourceTypeRadio = document.querySelector('input[name="import-curriculum-source-type"]:checked');
+      const sourceType = sourceTypeRadio ? sourceTypeRadio.value : 'file';
+
+      let activePayload = null;
+      if (sourceType === 'year') {
+        const yearSelect = document.getElementById('import-source-year-select');
+        const classSelect = document.getElementById('import-source-year-class-select');
+        const yr = yearSelect ? yearSelect.value : '';
+        const cid = classSelect ? classSelect.value : '';
+        const yData = (state.data.years && state.data.years[yr]) ? state.data.years[yr] : null;
+        if (!yData || !cid) {
+          alert('Please select a source academic year and class.');
+          return;
+        }
+        const classObj = (yData.classes || []).find(c => c.id === cid);
+        const lessons = (yData.lessonPlans && yData.lessonPlans[cid]) ? yData.lessonPlans[cid] : [];
+        activePayload = {
+          classInfo: classObj || { name: 'Imported Class', color: '#3b82f6', details: '' },
+          lessons: JSON.parse(JSON.stringify(lessons))
+        };
+      } else {
+        activePayload = this.importedCurriculumPayload;
+        if (!activePayload || !Array.isArray(activePayload.lessons)) {
+          alert('Please upload a Curriculum JSON file first.');
+          return;
+        }
+      }
+
+      const checkedBoxes = Array.from(document.querySelectorAll('#import-units-checklist .chk-import-unit:checked'));
+      if (checkedBoxes.length === 0) {
+        alert('Please select at least one unit to import.');
+        return;
+      }
+      const selectedUnitsSet = new Set(checkedBoxes.map(cb => cb.value));
+
+      const destSelect = document.getElementById('import-dest-class-select');
+      let destClassId = destSelect ? destSelect.value : this.selectedClassId;
+
+      if (destClassId === '__NEW_CLASS__') {
+        const newNameInput = document.getElementById('import-new-class-name-input');
+        const newName = (newNameInput && newNameInput.value.trim()) || activePayload.classInfo?.name || 'Imported Class';
+        const created = state.findOrCreateClassByName(
+          newName,
+          activePayload.classInfo?.details || '',
+          activePayload.classInfo?.color || null
+        );
+        if (!created) {
+          alert('Please enter a valid name for the new class.');
+          return;
+        }
+        destClassId = created.id;
+      }
+
+      if (!destClassId) {
+        alert('Please select a destination class.');
+        return;
+      }
+
+      const importModeSelect = document.getElementById('import-curriculum-mode-select');
+      const importMode = importModeSelect ? importModeSelect.value : 'append';
+      const clearDates = document.getElementById('import-opt-clear-dates')?.checked ?? true;
+
+      const lessonsToImport = activePayload.lessons
+        .filter(l => selectedUnitsSet.has((l.unit || 'General Curriculum').trim()))
+        .map((l, idx) => {
+          const cleanCw = Array.isArray(l.classwork)
+            ? l.classwork
+                .filter(cw => cw && ((cw.work && cw.work.trim()) || (cw.link && cw.link.trim())))
+                .map(cw => ({
+                  type: (cw.type || 'Task').trim(),
+                  work: (cw.work || '').trim(),
+                  link: (cw.link || '').trim()
+                }))
+            : [];
+
+          const cloned = {
+            id: `l_${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 5)}`,
+            title: l.title || 'Untitled Lesson',
+            unit: (l.unit || 'General Curriculum').trim(),
+            content: l.content || '',
+            classwork: cleanCw,
+            isFloat: Boolean(l.isFloat),
+            isRevision: Boolean(l.isRevision),
+            isTestMilestone: Boolean(l.isTestMilestone)
+          };
+
+          if (!clearDates) {
+            if (l.isTestMilestone) {
+              cloned.testSlotKey = l.testSlotKey || null;
+              cloned.testDate = l.testDate || null;
+              cloned.testPeriodId = l.testPeriodId || null;
+            }
+            if (l.isPinned) {
+              cloned.isPinned = true;
+              cloned.pinnedSlotKey = l.pinnedSlotKey || null;
+              cloned.pinnedDate = l.pinnedDate || null;
+              cloned.pinnedPeriodId = l.pinnedPeriodId || null;
+            }
+          }
+          return cloned;
+        });
+
+      if (!Array.isArray(state.data.lessonPlans[destClassId])) {
+        state.data.lessonPlans[destClassId] = [];
+      }
+
+      if (importMode === 'replace_all') {
+        state.data.lessonPlans[destClassId] = lessonsToImport;
+      } else if (importMode === 'replace_units') {
+        const existing = state.data.lessonPlans[destClassId];
+        // Group imported lessons by unit
+        const importedByUnit = new Map();
+        lessonsToImport.forEach(l => {
+          const u = (l.unit || 'General Curriculum').trim();
+          if (!importedByUnit.has(u)) importedByUnit.set(u, []);
+          importedByUnit.get(u).push(l);
+        });
+
+        const updatedList = [];
+        const replacedUnits = new Set();
+        existing.forEach(l => {
+          const u = (l.unit || 'General Curriculum').trim();
+          if (importedByUnit.has(u)) {
+            if (!replacedUnits.has(u)) {
+              updatedList.push(...importedByUnit.get(u));
+              replacedUnits.add(u);
+            }
+          } else {
+            updatedList.push(l);
+          }
+        });
+
+        // Append any selected units that did not exist in the destination class yet
+        importedByUnit.forEach((uLessons, uName) => {
+          if (!replacedUnits.has(uName)) {
+            updatedList.push(...uLessons);
+          }
+        });
+
+        state.data.lessonPlans[destClassId] = updatedList;
+      } else {
+        // append
+        state.data.lessonPlans[destClassId].push(...lessonsToImport);
+      }
+
+      this.selectedClassId = destClassId;
+      state.saveState();
+      refreshAllViews(false, true);
+
+      const backdrop = document.getElementById('modal-curriculum-transfer-backdrop');
+      if (backdrop) backdrop.classList.remove('active');
+
+      const destClassObj = state.classes.find(c => c.id === destClassId);
+      const destName = destClassObj ? destClassObj.name : 'Class';
+      if (typeof showToastNotification === 'function') {
+        showToastNotification(`📥 Imported ${lessonsToImport.length} lessons (${selectedUnitsSet.size} unit${selectedUnitsSet.size !== 1 ? 's' : ''}) into ${destName}!`);
+      }
+    },
+
     bindEvents() {
       document.addEventListener('change', (e) => {
         if (e.target.classList.contains('chk-link-class')) {
@@ -3264,6 +3893,50 @@
           this.executeSyncOptions();
         });
       }
+
+      // Curriculum Export / Import Modal & Controls
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('#btn-open-curriculum-transfer, #btn-export-class-curriculum')) {
+          this.openCurriculumTransferModal('export');
+        } else if (e.target.closest('#btn-import-class-curriculum')) {
+          this.openCurriculumTransferModal('import');
+        } else if (e.target.closest('#tab-curriculum-export')) {
+          this.switchCurriculumTransferTab('export');
+        } else if (e.target.closest('#tab-curriculum-import')) {
+          this.switchCurriculumTransferTab('import');
+        } else if (e.target.closest('#btn-export-select-all-units')) {
+          document.querySelectorAll('#export-units-checklist .chk-export-unit').forEach(cb => cb.checked = true);
+        } else if (e.target.closest('#btn-export-deselect-all-units')) {
+          document.querySelectorAll('#export-units-checklist .chk-export-unit').forEach(cb => cb.checked = false);
+        } else if (e.target.closest('#btn-import-select-all-units')) {
+          document.querySelectorAll('#import-units-checklist .chk-import-unit').forEach(cb => cb.checked = true);
+        } else if (e.target.closest('#btn-import-deselect-all-units')) {
+          document.querySelectorAll('#import-units-checklist .chk-import-unit').forEach(cb => cb.checked = false);
+        } else if (e.target.closest('#btn-execute-curriculum-export')) {
+          this.executeCurriculumExportFromModal();
+        } else if (e.target.closest('#btn-execute-curriculum-import')) {
+          this.executeCurriculumImportFromModal();
+        }
+      });
+
+      document.addEventListener('change', (e) => {
+        if (e.target.id === 'export-curriculum-class-select') {
+          this.renderExportUnitsChecklist(e.target.value);
+        } else if (e.target.name === 'import-curriculum-source-type') {
+          this.updateImportSourceVisibility(e.target.value);
+        } else if (e.target.id === 'import-source-year-select') {
+          this.populateImportYearClasses();
+        } else if (e.target.id === 'import-source-year-class-select') {
+          this.loadImportPreviewFromSelectedYearClass();
+        } else if (e.target.id === 'import-dest-class-select') {
+          const wrap = document.getElementById('import-new-class-name-wrap');
+          if (wrap) wrap.style.display = (e.target.value === '__NEW_CLASS__') ? 'block' : 'none';
+        } else if (e.target.id === 'input-import-curriculum-file') {
+          if (e.target.files && e.target.files[0]) {
+            this.handleCurriculumFileUpload(e.target.files[0]);
+          }
+        }
+      });
 
       document.addEventListener('click', (e) => {
         const btn = e.target.closest('.class-item-btn');

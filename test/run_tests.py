@@ -1587,6 +1587,21 @@ def run():
     runner.assert_true("sanitizeLessonPlans" in app_code, "app.js implements sanitizeLessonPlans to clean blank tasks from existing lessons")
     runner.assert_true("sanitizeLessonPlans" in st_js, "js/state.js implements sanitizeLessonPlans to clean blank tasks from existing lessons")
     runner.assert_true("if (workVal || linkVal)" in app_code, "app.js readClassworkInputsFromModal ignores rows with only a type and blank work/link")
+    runner.assert_true("background:#0f172a !important" not in app_code, "app.js copy-unit-dropdown does not hardcode dark #0f172a !important background over dark text in light mode")
+
+    # -------------------------------------------------------------------------
+    # TEST 34: Class Curriculum & Unit-by-Unit Export / Import & Cross-Year Transfer
+    # -------------------------------------------------------------------------
+    print("\nTest 34: Class Curriculum & Unit-by-Unit Export / Import & Cross-Year Transfer")
+    runner.assert_true('id="modal-curriculum-transfer-backdrop"' in idx_html, 'index.html includes #modal-curriculum-transfer-backdrop')
+    runner.assert_true('id="btn-export-class-curriculum"' in idx_html, 'index.html includes #btn-export-class-curriculum button')
+    runner.assert_true('id="btn-import-class-curriculum"' in idx_html, 'index.html includes #btn-import-class-curriculum button')
+    runner.assert_true('export-unit-btn' in app_code, 'app.js renders quick Export Unit button on unit headers')
+    runner.assert_true('buildCurriculumExportPayload' in app_code, 'app.js implements buildCurriculumExportPayload')
+    runner.assert_true('executeCurriculumExportFromModal' in app_code, 'app.js implements executeCurriculumExportFromModal')
+    runner.assert_true('executeCurriculumImportFromModal' in app_code, 'app.js implements executeCurriculumImportFromModal')
+    runner.assert_true('loadImportPreviewFromSelectedYearClass' in app_code, 'app.js implements cross-year curriculum transfer preview and loader')
+    runner.assert_true("id: 'curriculum-export-import'" in help_code, 'js/help.js documents curriculum & unit export/import')
 
     print('\n==================================================')
     print(f'Test Results: {runner.passes} PASSED, {runner.fails} FAILED')

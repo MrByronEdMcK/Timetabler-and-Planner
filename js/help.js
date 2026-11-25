@@ -163,6 +163,22 @@
       `
     },
     {
+      id: 'curriculum-export-import',
+      cat: 'curriculum',
+      title: '📦 Export & Import Curriculum or Units (Across Devices & Years)',
+      icon: '📦',
+      keywords: 'export import curriculum unit transfer year device share json copy unit by unit',
+      summary: 'Export a full class curriculum or specific units to JSON, or transfer units directly across academic years.',
+      details: `
+        <p>Easily share curriculum with colleagues, move lesson plans to another device, or roll units forward into a new school year:</p>
+        <ul>
+          <li><strong>Quick Unit Export:</strong> Click <strong>"📤 Export Unit"</strong> on any unit header in View 3 to immediately download that unit's lessons, notes, and homework tasks as a standalone JSON file.</li>
+          <li><strong>Custom Class / Multi-Unit Export:</strong> Click <strong>"📤 Export"</strong> in View 3 to pick any combination of units and choose whether to include homework tasks, teaching notes, lesson tags, or pinned dates.</li>
+          <li><strong>Import from File or Another Year:</strong> Click <strong>"📥 Import"</strong> to upload a Curriculum/Backup JSON file from another device, or select <strong>"Transfer from Academic Year"</strong> to pull units directly from a previous year's class into an existing or brand-new class (with options to append, replace matching units, or replace the entire class curriculum).</li>
+        </ul>
+      `
+    },
+    {
       id: 'lock-threshold',
       cat: 'pacing',
       title: '🔒 Lock Threshold (Protecting Past Taught Lessons)',

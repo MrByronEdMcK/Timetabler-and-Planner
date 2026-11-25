@@ -2677,11 +2677,13 @@ body[data-theme="light"] .copy-unit-dropdown {
   box-shadow: var(--shadow-lg) !important;
 }
 
-body[data-theme="light"] .copy-unit-item {
+body[data-theme="light"] .copy-unit-item,
+body[data-theme="light"] .copy-unit-target-btn {
   color: var(--text-main) !important;
 }
 
-body[data-theme="light"] .copy-unit-item:hover {
+body[data-theme="light"] .copy-unit-item:hover,
+body[data-theme="light"] .copy-unit-target-btn:hover {
   background: var(--bg-surface-hover) !important;
 }
 
