@@ -6,10 +6,10 @@
   <title>Timetable and Planner</title>
   <meta name="description" content="Interactive annual lesson planner, X-week rotating timetabler, and pacing conflict resolver for teachers.">
   
-  <link rel="stylesheet" href="css/main.css?v=4.8">
-  <link rel="stylesheet" href="css/calendar.css?v=4.8">
-  <link rel="stylesheet" href="css/timetable.css?v=4.8">
-  <link rel="stylesheet" href="css/planner.css?v=4.8">
+  <link rel="stylesheet" href="css/main.css?v=4.9">
+  <link rel="stylesheet" href="css/calendar.css?v=4.9">
+  <link rel="stylesheet" href="css/timetable.css?v=4.9">
+  <link rel="stylesheet" href="css/planner.css?v=4.9">
   <script>
     (function() {
       try {
@@ -180,7 +180,8 @@
             </div>
             <button type="button" class="btn btn-secondary btn-xs" id="btn-open-link-classes" style="margin-top:0.5rem; width:100%; font-weight:700;" title="Link parallel classes to auto-sync homework">Manage Class Links</button>
             <div style="display:flex; gap:0.4rem; margin-top:0.4rem;">
-              <button type="button" class="btn btn-secondary btn-xs" id="btn-open-curriculum-transfer" style="flex:1; font-weight:700;" title="Export or Import a class curriculum or specific units">📦 Export / Import</button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-export-class-curriculum" style="flex:1; font-weight:700;" title="Export this class's curriculum or individual units">📤 Export</button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-import-class-curriculum" style="flex:1; font-weight:700;" title="Import curriculum or units from a file or another academic year">📥 Import</button>
             </div>
           </div>
 
@@ -191,8 +192,6 @@
                 <span>Ordered Lesson Sequence</span>
               </div>
               <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-                <button class="btn btn-secondary btn-sm" id="btn-export-class-curriculum" title="Export this class's curriculum or individual units">📤 Export</button>
-                <button class="btn btn-secondary btn-sm" id="btn-import-class-curriculum" title="Import curriculum or units from a file or another academic year">📥 Import</button>
                 <button class="btn btn-secondary btn-sm" id="btn-sync-linked-curriculum" title="Sync all curriculum and homework tasks to linked class(es)">🔄 Sync Linked Curriculum</button>
                 <button class="btn btn-warning btn-sm" id="btn-insert-float-lesson" title="Insert a free Float lesson into sequence">🎈 + Insert Float Lesson</button>
                 <button class="btn btn-secondary btn-sm" id="btn-toggle-collapse-all-topics" title="Collapse or Expand all topic groups">Toggle Collapse All</button>
@@ -1089,9 +1088,9 @@
   </div>
 
   <!-- Application Modules & Controller -->
-  <script src="js/help.js?v=4.8"></script>
-  <script src="js/timer.js?v=4.8"></script>
-  <script src="js/app.js?v=4.8"></script>
+  <script src="js/help.js?v=4.9"></script>
+  <script src="js/timer.js?v=4.9"></script>
+  <script src="js/app.js?v=4.9"></script>
 
   <!-- URL View & Theme Parameter Helper for Headless Inspection & Deep Linking -->
   <script>

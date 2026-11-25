@@ -2760,9 +2760,7 @@
           e.preventDefault();
           e.stopPropagation();
           const unitName = exportUnitBtn.getAttribute('data-unit');
-          if (unitName) {
-            this.exportSingleUnitDirect(this.selectedClassId, unitName);
-          }
+          this.openCurriculumTransferModal('export', unitName || null);
           return;
         }
 
@@ -3339,20 +3337,6 @@
       URL.revokeObjectURL(url);
     },
 
-    exportSingleUnitDirect(classId, unitName) {
-      if (!classId || !unitName) return;
-      const payload = this.buildCurriculumExportPayload(classId, [unitName], {
-        classwork: true,
-        content: true,
-        tags: true,
-        dates: false
-      });
-      this.downloadCurriculumJSON(payload, unitName);
-      if (typeof showToastNotification === 'function') {
-        showToastNotification(`📤 Exported unit "${unitName}" (${payload.lessonCount} lessons)`);
-      }
-    },
-
     openCurriculumTransferModal(mode = 'export', preselectedUnit = null) {
       if (!this.selectedClassId && state.classes.length > 0) {
         this.selectedClassId = state.classes[0].id;
@@ -3896,7 +3880,7 @@
 
       // Curriculum Export / Import Modal & Controls
       document.addEventListener('click', (e) => {
-        if (e.target.closest('#btn-open-curriculum-transfer, #btn-export-class-curriculum')) {
+        if (e.target.closest('#btn-export-class-curriculum')) {
           this.openCurriculumTransferModal('export');
         } else if (e.target.closest('#btn-import-class-curriculum')) {
           this.openCurriculumTransferModal('import');

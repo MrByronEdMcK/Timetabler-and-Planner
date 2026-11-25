@@ -172,9 +172,8 @@
       details: `
         <p>Easily share curriculum with colleagues, move lesson plans to another device, or roll units forward into a new school year:</p>
         <ul>
-          <li><strong>Quick Unit Export:</strong> Click <strong>"📤 Export Unit"</strong> on any unit header in View 3 to immediately download that unit's lessons, notes, and homework tasks as a standalone JSON file.</li>
-          <li><strong>Custom Class / Multi-Unit Export:</strong> Click <strong>"📤 Export"</strong> in View 3 to pick any combination of units and choose whether to include homework tasks, teaching notes, lesson tags, or pinned dates.</li>
-          <li><strong>Import from File or Another Year:</strong> Click <strong>"📥 Import"</strong> to upload a Curriculum/Backup JSON file from another device, or select <strong>"Transfer from Academic Year"</strong> to pull units directly from a previous year's class into an existing or brand-new class (with options to append, replace matching units, or replace the entire class curriculum).</li>
+          <li><strong>Export Class or Units:</strong> Click <strong>"📤 Export"</strong> under <em>Manage Class Links</em> (or <strong>"📤 Export Unit"</strong> on any unit header) to open the export modal, select which units to include, and choose your takeout options (homework tasks, teaching notes, lesson tags, or pinned dates).</li>
+          <li><strong>Import from File or Another Year:</strong> Click <strong>"📥 Import"</strong> under <em>Manage Class Links</em> to upload a Curriculum/Backup JSON file from another device, or select <strong>"Transfer from Academic Year"</strong> to pull units directly from a previous year's class into an existing or brand-new class (with options to append, replace matching units, or replace the entire class curriculum).</li>
         </ul>
       `
     },
