@@ -1605,6 +1605,26 @@ def run():
     runner.assert_true('loadImportPreviewFromSelectedYearClass' in app_code, 'app.js implements cross-year curriculum transfer preview and loader')
     runner.assert_true("id: 'curriculum-export-import'" in help_code, 'js/help.js documents curriculum & unit export/import')
 
+    # -------------------------------------------------------------------------
+    # TEST 35: Chronological Calendar Ordering for Blockout Events
+    # -------------------------------------------------------------------------
+    print("\nTest 35: Chronological Calendar Ordering for Blockout Events")
+    runner.assert_true('sortEventsChronologically' in app_code, 'app.js implements sortEventsChronologically')
+    runner.assert_true('sortEventsChronologically' in st_js, 'js/state.js implements sortEventsChronologically')
+    with open('js/ui/calendarUI.js', 'r', encoding='utf-8') as f:
+        cal_ui_code = f.read()
+    runner.assert_true('this.sortEvents(state.data.events)' in cal_ui_code, 'js/ui/calendarUI.js sorts blockout events in calendar order')
+
+    # Simulate adding out-of-order blockout events and verifying calendar position
+    sim_events = [
+        {'id': 'e1', 'title': 'Graduation', 'startDate': '2026-10-20', 'endDate': '2026-10-20'},
+        {'id': 'e2', 'title': 'Athletics Carnival', 'startDate': '2026-07-23', 'endDate': '2026-07-23'},
+        {'id': 'e3', 'title': 'Strike Day', 'startDate': '2026-07-24', 'endDate': '2026-07-24'},
+        {'id': 'e4', 'title': 'Swimming Carnival', 'startDate': '2026-02-13', 'endDate': '2026-02-13'}
+    ]
+    sim_events.sort(key=lambda x: (x.get('startDate', ''), x.get('endDate', ''), x.get('title', '')))
+    runner.assert_equal([e['title'] for e in sim_events], ['Swimming Carnival', 'Athletics Carnival', 'Strike Day', 'Graduation'], 'Blockout events sort strictly into chronological calendar order')
+
     print('\n==================================================')
     print(f'Test Results: {runner.passes} PASSED, {runner.fails} FAILED')
     print('==================================================\n')

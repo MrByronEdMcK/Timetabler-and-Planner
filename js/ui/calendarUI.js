@@ -54,6 +54,20 @@ export const CalendarUI = {
     `).join('');
   },
 
+  sortEvents(events = state.data.events) {
+    if (!Array.isArray(events)) return [];
+    events.sort((a, b) => {
+      const sA = String(a?.startDate || a?.date || '');
+      const sB = String(b?.startDate || b?.date || '');
+      if (sA !== sB) return sA.localeCompare(sB);
+      const eA = String(a?.endDate || a?.date || sA);
+      const eB = String(b?.endDate || b?.date || sB);
+      if (eA !== eB) return eA.localeCompare(eB);
+      return String(a?.title || '').localeCompare(String(b?.title || ''));
+    });
+    return events;
+  },
+
   renderEventsList() {
     const container = document.getElementById('event-list-container');
     if (!container) return;
@@ -63,6 +77,7 @@ export const CalendarUI = {
       return;
     }
 
+    this.sortEvents(state.data.events);
     container.innerHTML = state.events.map(ev => {
       // Multi-class badges
       const classIds = Array.isArray(ev.affectedClassIds) ? ev.affectedClassIds : (ev.affectedClassId ? [ev.affectedClassId] : []);
@@ -290,6 +305,7 @@ export const CalendarUI = {
           state.data.events.push(newEvent);
         }
 
+        this.sortEvents(state.data.events);
         state.saveState();
         document.getElementById('modal-event-backdrop')?.classList.remove('active');
         eventForm.reset();

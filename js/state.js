@@ -235,6 +235,20 @@ export const PersistentStorageManager = {
   }
 };
 
+function sortEventsChronologically(events) {
+  if (!Array.isArray(events)) return events;
+  events.sort((a, b) => {
+    const sA = String(a?.startDate || a?.date || '');
+    const sB = String(b?.startDate || b?.date || '');
+    if (sA !== sB) return sA.localeCompare(sB);
+    const eA = String(a?.endDate || a?.date || sA);
+    const eB = String(b?.endDate || b?.date || sB);
+    if (eA !== eB) return eA.localeCompare(eB);
+    return String(a?.title || '').localeCompare(String(b?.title || ''));
+  });
+  return events;
+}
+
 function sanitizeLessonPlans(lessonPlans) {
   let cleaned = false;
   if (!lessonPlans || typeof lessonPlans !== 'object') return false;
@@ -272,14 +286,22 @@ export class StateStore {
   cleanBlankClassworkFromData(stateObj) {
     if (!stateObj || typeof stateObj !== 'object') return false;
     let changed = false;
+    if (Array.isArray(stateObj.events)) {
+      sortEventsChronologically(stateObj.events);
+    }
     if (stateObj.lessonPlans && sanitizeLessonPlans(stateObj.lessonPlans)) {
       changed = true;
     }
     if (stateObj.years && typeof stateObj.years === 'object') {
       Object.keys(stateObj.years).forEach(yKey => {
         const yData = stateObj.years[yKey];
-        if (yData && yData.lessonPlans && sanitizeLessonPlans(yData.lessonPlans)) {
-          changed = true;
+        if (yData) {
+          if (Array.isArray(yData.events)) {
+            sortEventsChronologically(yData.events);
+          }
+          if (yData.lessonPlans && sanitizeLessonPlans(yData.lessonPlans)) {
+            changed = true;
+          }
         }
       });
     }
@@ -484,6 +506,9 @@ export class StateStore {
   }
 
   syncCurrentYearToYears() {
+    if (Array.isArray(this.data.events)) {
+      sortEventsChronologically(this.data.events);
+    }
     const yr = this.academicYear;
     if (!this.data.years) this.data.years = {};
     this.data.years[yr] = {
