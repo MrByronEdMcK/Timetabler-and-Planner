@@ -205,7 +205,7 @@ export const HomeworkUI = {
 
   getFormattedClassworkForLesson(lesson) {
     if (!lesson || !lesson.classwork || !Array.isArray(lesson.classwork)) return [];
-    return lesson.classwork.filter(item => item && (item.type || item.work));
+    return lesson.classwork.filter(item => item && ((item.work && item.work.trim()) || (item.link && item.link.trim())));
   },
 
   isLessonAssessment(lesson) {

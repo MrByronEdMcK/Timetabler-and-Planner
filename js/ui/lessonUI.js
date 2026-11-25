@@ -265,9 +265,56 @@ export const LessonUI = {
     }
   },
 
+  renderClassworkInputs(classworkArray = []) {
+    const container = document.getElementById('classwork-inputs-container');
+    if (!container) return;
+
+    const validItems = Array.isArray(classworkArray)
+      ? classworkArray.filter(cw => cw && ((cw.work && cw.work.trim()) || (cw.link && cw.link.trim())))
+      : [];
+
+    container.innerHTML = validItems.map((cw) => `
+      <div class="classwork-input-row">
+        <input type="text" class="form-control cw-type-input" list="classwork-type-suggestions" placeholder="Type (e.g. Textbook)" value="${cw.type || ''}" style="font-size:0.82rem; padding:0.3rem 0.5rem;">
+        <input type="text" class="form-control cw-work-input" placeholder="Work (e.g. 7A Q1-5, Page 7)" value="${cw.work || ''}" style="font-size:0.82rem; padding:0.3rem 0.5rem;">
+        <input type="text" class="form-control cw-link-input" placeholder="Link / URL (Optional)" value="${cw.link || ''}" style="font-size:0.82rem; padding:0.3rem 0.5rem;">
+        <button type="button" class="btn btn-danger btn-xs btn-remove-cw-row" title="Delete Item" style="padding:0.25rem 0.4rem;">🗑️</button>
+      </div>
+    `).join('');
+  },
+
+  addClassworkInputRow(type = '', work = '', link = '') {
+    const container = document.getElementById('classwork-inputs-container');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = 'classwork-input-row';
+    div.innerHTML = `
+      <input type="text" class="form-control cw-type-input" list="classwork-type-suggestions" placeholder="Type (e.g. Textbook)" value="${type}" style="font-size:0.82rem; padding:0.3rem 0.5rem;">
+      <input type="text" class="form-control cw-work-input" placeholder="Work (e.g. 7A Q1-5, Page 7)" value="${work}" style="font-size:0.82rem; padding:0.3rem 0.5rem;">
+      <input type="text" class="form-control cw-link-input" placeholder="Link / URL (Optional)" value="${link}" style="font-size:0.82rem; padding:0.3rem 0.5rem;">
+      <button type="button" class="btn btn-danger btn-xs btn-remove-cw-row" title="Delete Item" style="padding:0.25rem 0.4rem;">🗑️</button>
+    `;
+    container.appendChild(div);
+  },
+
+  readClassworkInputsFromModal() {
+    const rows = document.querySelectorAll('#classwork-inputs-container .classwork-input-row');
+    const classwork = [];
+    rows.forEach(row => {
+      const typeVal = row.querySelector('.cw-type-input')?.value?.trim() || '';
+      const workVal = row.querySelector('.cw-work-input')?.value?.trim() || '';
+      const linkVal = row.querySelector('.cw-link-input')?.value?.trim() || '';
+      if (workVal || linkVal) {
+        classwork.push({ type: typeVal || 'Task', work: workVal, link: linkVal });
+      }
+    });
+    return classwork;
+  },
+
   openAddLessonModal() {
     const backdrop = document.getElementById('modal-lesson-backdrop');
     if (!backdrop) return;
+    this.renderClassworkInputs([]);
     this.updateSyncLinkedCheckboxInModal();
     backdrop.classList.add('active');
   }
@@ -294,11 +341,14 @@ export const LessonViewer = {
     }
 
     let classworkHtml = '';
-    if (lesson.classwork && Array.isArray(lesson.classwork) && lesson.classwork.length > 0) {
+    const validClasswork = (lesson.classwork && Array.isArray(lesson.classwork))
+      ? lesson.classwork.filter(cw => cw && ((cw.work && cw.work.trim()) || (cw.link && cw.link.trim())))
+      : [];
+    if (validClasswork.length > 0) {
       classworkHtml = `
         <div style="margin-top:0.75rem; padding:0.75rem; background:rgba(59, 130, 246, 0.1); border:1px solid rgba(59, 130, 246, 0.3); border-radius:var(--radius-sm);">
           <strong style="color:#93c5fd; font-size:0.85rem; display:block; margin-bottom:0.4rem;">📚 Classwork Tasks:</strong>
-          ${lesson.classwork.map(cw => `
+          ${validClasswork.map(cw => `
             <div style="font-size:0.85rem; margin-bottom:0.3rem;">
               <span class="cw-badge cw-badge-default">${cw.type || 'Task'}</span>
               <strong>${cw.work || ''}</strong>
@@ -363,9 +413,12 @@ export const LessonViewer = {
       text += `Date/Period: ${slotInfo.termName} - ${TermManager.formatDisplayDate(slotInfo.date)} (${slotInfo.periodName})\n`;
     }
 
-    if (lesson.classwork && Array.isArray(lesson.classwork) && lesson.classwork.length > 0) {
+    const validClasswork = (lesson.classwork && Array.isArray(lesson.classwork))
+      ? lesson.classwork.filter(cw => cw && ((cw.work && cw.work.trim()) || (cw.link && cw.link.trim())))
+      : [];
+    if (validClasswork.length > 0) {
       text += `\nCLASSWORK TASKS:\n`;
-      lesson.classwork.forEach(cw => {
+      validClasswork.forEach(cw => {
         text += `- [${cw.type || 'Task'}]: ${cw.work}${cw.link ? ` (${cw.link})` : ''}\n`;
       });
     }

@@ -1577,6 +1577,17 @@ def run():
         runner.assert_true('btn-wb-collapse-bar' in code, f'{name} binds click handler for collapsing Progress Filter bar')
         runner.assert_true('btn-wb-expand-bar' in code, f'{name} binds click handler for expanding Progress Filter bar')
 
+    # -------------------------------------------------------------------------
+    # TEST 33: No Default Blank Textbook Tasks & Blank Task Sanitization
+    # -------------------------------------------------------------------------
+    print("\nTest 33: No Default Blank Textbook Tasks & Blank Task Sanitization")
+    runner.assert_true("classworkArray = [{ type: 'Textbook', work: '', link: '' }]" not in app_code, "app.js does not default empty classwork to a blank Textbook row")
+    runner.assert_true("this.renderClassworkInputs([{ type: 'Textbook', work: '', link: '' }])" not in app_code, "app.js openAddLessonModal does not populate a blank Textbook row")
+    runner.assert_true("this.renderClassworkInputs([])" in app_code, "app.js openAddLessonModal renders 0 tasks by default")
+    runner.assert_true("sanitizeLessonPlans" in app_code, "app.js implements sanitizeLessonPlans to clean blank tasks from existing lessons")
+    runner.assert_true("sanitizeLessonPlans" in st_js, "js/state.js implements sanitizeLessonPlans to clean blank tasks from existing lessons")
+    runner.assert_true("if (workVal || linkVal)" in app_code, "app.js readClassworkInputsFromModal ignores rows with only a type and blank work/link")
+
     print('\n==================================================')
     print(f'Test Results: {runner.passes} PASSED, {runner.fails} FAILED')
     print('==================================================\n')

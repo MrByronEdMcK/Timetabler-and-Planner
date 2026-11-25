@@ -238,12 +238,55 @@
     }
   };
 
+  function sanitizeLessonPlans(lessonPlans) {
+    let cleaned = false;
+    if (!lessonPlans || typeof lessonPlans !== 'object') return false;
+    Object.keys(lessonPlans).forEach(classId => {
+      const lessons = lessonPlans[classId];
+      if (Array.isArray(lessons)) {
+        lessons.forEach(lesson => {
+          if (lesson && Array.isArray(lesson.classwork)) {
+            const origLen = lesson.classwork.length;
+            lesson.classwork = lesson.classwork.filter(cw => {
+              if (!cw || typeof cw !== 'object') return false;
+              const w = (cw.work || '').trim();
+              const l = (cw.link || '').trim();
+              return Boolean(w || l);
+            });
+            if (lesson.classwork.length !== origLen) cleaned = true;
+          }
+        });
+      }
+    });
+    return cleaned;
+  }
+
   // State Store
   class StateStore {
     constructor() {
       this.data = this.loadState();
+      if (this.cleanBlankClassworkFromData(this.data)) {
+        this.saveState();
+      }
       this.isPersisted = false;
       this.initPersistence();
+    }
+
+    cleanBlankClassworkFromData(stateObj) {
+      if (!stateObj || typeof stateObj !== 'object') return false;
+      let changed = false;
+      if (stateObj.lessonPlans && sanitizeLessonPlans(stateObj.lessonPlans)) {
+        changed = true;
+      }
+      if (stateObj.years && typeof stateObj.years === 'object') {
+        Object.keys(stateObj.years).forEach(yKey => {
+          const yData = stateObj.years[yKey];
+          if (yData && yData.lessonPlans && sanitizeLessonPlans(yData.lessonPlans)) {
+            changed = true;
+          }
+        });
+      }
+      return changed;
     }
 
     async initPersistence() {
@@ -257,6 +300,7 @@
           const dbData = await PersistentStorageManager.loadFromIndexedDB();
           if (dbData && typeof dbData === 'object' && Object.keys(dbData).length > 0) {
             console.info('Restored state from persistent IndexedDB backup');
+            this.cleanBlankClassworkFromData(dbData);
             this.data = dbData;
             try {
               localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
@@ -671,6 +715,7 @@
         years: years
       };
 
+      this.cleanBlankClassworkFromData(this.data);
       this.setAcademicYear(dataYear);
       this.saveState();
       return true;
@@ -2650,8 +2695,11 @@
           if (isRevision) tagsHtml += `<span class="tag tag-revision">⭐ Revision</span> `;
           if (isFloat) tagsHtml += `<span class="tag tag-float">🎈 Float</span> `;
           if (isTest) tagsHtml += `<span class="tag tag-test">🎯 Test: ${lesson.testDate || 'Set Date'}</span> `;
-          if (lesson.classwork && Array.isArray(lesson.classwork) && lesson.classwork.length > 0) {
-            tagsHtml += `<span class="tag" style="background:rgba(59,130,246,0.2); color:#60a5fa; border:1px solid rgba(59,130,246,0.4);">📚 ${lesson.classwork.length} Task${lesson.classwork.length > 1 ? 's' : ''}</span> `;
+          const validTasks = (lesson.classwork && Array.isArray(lesson.classwork))
+            ? lesson.classwork.filter(cw => cw && ((cw.work && cw.work.trim()) || (cw.link && cw.link.trim())))
+            : [];
+          if (validTasks.length > 0) {
+            tagsHtml += `<span class="tag" style="background:rgba(59,130,246,0.2); color:#60a5fa; border:1px solid rgba(59,130,246,0.4);">📚 ${validTasks.length} Task${validTasks.length > 1 ? 's' : ''}</span> `;
           }
 
           html += `
@@ -3027,11 +3075,11 @@
       const container = document.getElementById('classwork-inputs-container');
       if (!container) return;
 
-      if (!classworkArray || classworkArray.length === 0) {
-        classworkArray = [{ type: 'Textbook', work: '', link: '' }];
-      }
+      const validItems = Array.isArray(classworkArray)
+        ? classworkArray.filter(cw => cw && ((cw.work && cw.work.trim()) || (cw.link && cw.link.trim())))
+        : [];
 
-      container.innerHTML = classworkArray.map((cw) => `
+      container.innerHTML = validItems.map((cw) => `
         <div class="classwork-input-row">
           <input type="text" class="form-control cw-type-input" list="classwork-type-suggestions" placeholder="Type (e.g. Textbook)" value="${cw.type || ''}" style="font-size:0.82rem; padding:0.3rem 0.5rem;">
           <input type="text" class="form-control cw-work-input" placeholder="Work (e.g. 7A Q1-5, Page 7)" value="${cw.work || ''}" style="font-size:0.82rem; padding:0.3rem 0.5rem;">
@@ -3062,7 +3110,7 @@
         const typeVal = row.querySelector('.cw-type-input')?.value?.trim() || '';
         const workVal = row.querySelector('.cw-work-input')?.value?.trim() || '';
         const linkVal = row.querySelector('.cw-link-input')?.value?.trim() || '';
-        if (typeVal || workVal || linkVal) {
+        if (workVal || linkVal) {
           classwork.push({ type: typeVal || 'Task', work: workVal, link: linkVal });
         }
       });
@@ -3103,7 +3151,7 @@
       const datePicker = document.getElementById('lesson-forced-date-picker');
       if (datePicker) datePicker.value = '';
 
-      this.renderClassworkInputs([{ type: 'Textbook', work: '', link: '' }]);
+      this.renderClassworkInputs([]);
       this.populateUnitAutocomplete();
       this.bindTestCheckToggle();
       this.bindForcedDatePickerEvents();
@@ -3398,11 +3446,14 @@
       }
 
       let classworkHtml = '';
-      if (lesson.classwork && Array.isArray(lesson.classwork) && lesson.classwork.length > 0) {
+      const validClasswork = (lesson.classwork && Array.isArray(lesson.classwork))
+        ? lesson.classwork.filter(cw => cw && ((cw.work && cw.work.trim()) || (cw.link && cw.link.trim())))
+        : [];
+      if (validClasswork.length > 0) {
         classworkHtml = `
           <div style="margin-top:0.75rem; padding:0.75rem; background:rgba(59, 130, 246, 0.1); border:1px solid rgba(59, 130, 246, 0.3); border-radius:var(--radius-sm);">
             <strong style="color:#93c5fd; font-size:0.85rem; display:block; margin-bottom:0.4rem;">📚 Classwork Tasks:</strong>
-            ${lesson.classwork.map(cw => `
+            ${validClasswork.map(cw => `
               <div style="font-size:0.85rem; margin-bottom:0.3rem;">
                 <span class="cw-badge cw-badge-default">${cw.type || 'Task'}</span>
                 <strong>${cw.work || ''}</strong>
@@ -3467,9 +3518,12 @@
         text += `Date/Period: ${slotInfo.termName} - ${TermManager.formatDisplayDate(slotInfo.date)} (${slotInfo.periodName})\n`;
       }
 
-      if (lesson.classwork && Array.isArray(lesson.classwork) && lesson.classwork.length > 0) {
+      const validClasswork = (lesson.classwork && Array.isArray(lesson.classwork))
+        ? lesson.classwork.filter(cw => cw && ((cw.work && cw.work.trim()) || (cw.link && cw.link.trim())))
+        : [];
+      if (validClasswork.length > 0) {
         text += `\nCLASSWORK TASKS:\n`;
-        lesson.classwork.forEach(cw => {
+        validClasswork.forEach(cw => {
           text += `- [${cw.type || 'Task'}]: ${cw.work}${cw.link ? ` (${cw.link})` : ''}\n`;
         });
       }
@@ -5031,7 +5085,7 @@
 
     getFormattedClassworkForLesson(lesson) {
       if (!lesson || !lesson.classwork || !Array.isArray(lesson.classwork)) return [];
-      return lesson.classwork.filter(item => item && (item.type || item.work));
+      return lesson.classwork.filter(item => item && ((item.work && item.work.trim()) || (item.link && item.link.trim())));
     },
 
     isLessonAssessment(lesson) {

@@ -235,12 +235,55 @@ export const PersistentStorageManager = {
   }
 };
 
+function sanitizeLessonPlans(lessonPlans) {
+  let cleaned = false;
+  if (!lessonPlans || typeof lessonPlans !== 'object') return false;
+  Object.keys(lessonPlans).forEach(classId => {
+    const lessons = lessonPlans[classId];
+    if (Array.isArray(lessons)) {
+      lessons.forEach(lesson => {
+        if (lesson && Array.isArray(lesson.classwork)) {
+          const origLen = lesson.classwork.length;
+          lesson.classwork = lesson.classwork.filter(cw => {
+            if (!cw || typeof cw !== 'object') return false;
+            const w = (cw.work || '').trim();
+            const l = (cw.link || '').trim();
+            return Boolean(w || l);
+          });
+          if (lesson.classwork.length !== origLen) cleaned = true;
+        }
+      });
+    }
+  });
+  return cleaned;
+}
+
 // State Store
 export class StateStore {
   constructor() {
     this.data = this.loadState();
+    if (this.cleanBlankClassworkFromData(this.data)) {
+      this.saveState();
+    }
     this.isPersisted = false;
     this.initPersistence();
+  }
+
+  cleanBlankClassworkFromData(stateObj) {
+    if (!stateObj || typeof stateObj !== 'object') return false;
+    let changed = false;
+    if (stateObj.lessonPlans && sanitizeLessonPlans(stateObj.lessonPlans)) {
+      changed = true;
+    }
+    if (stateObj.years && typeof stateObj.years === 'object') {
+      Object.keys(stateObj.years).forEach(yKey => {
+        const yData = stateObj.years[yKey];
+        if (yData && yData.lessonPlans && sanitizeLessonPlans(yData.lessonPlans)) {
+          changed = true;
+        }
+      });
+    }
+    return changed;
   }
 
   async initPersistence() {
@@ -253,6 +296,7 @@ export class StateStore {
       if (!localStored) {
         const dbData = await PersistentStorageManager.loadFromIndexedDB();
         if (dbData && typeof dbData === 'object' && Object.keys(dbData).length > 0) {
+          this.cleanBlankClassworkFromData(dbData);
           this.data = dbData;
           try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
@@ -571,6 +615,7 @@ export class StateStore {
       years: years
     };
 
+    this.cleanBlankClassworkFromData(this.data);
     this.setAcademicYear(dataYear);
     this.saveState();
     return true;
