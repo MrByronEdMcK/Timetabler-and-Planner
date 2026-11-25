@@ -115,6 +115,40 @@
   border-color: var(--border-hover);
 }
 
+.topic-group-header.dragging-unit {
+  opacity: 0.45;
+  border: 2px dashed var(--primary);
+  background: var(--primary-light);
+}
+
+.topic-group-container.unit-drag-over-top > .topic-group-header {
+  border-top: 3px solid var(--primary);
+  transform: translateY(2px);
+}
+
+.topic-group-container.unit-drag-over-bottom > .topic-group-header {
+  border-bottom: 3px solid var(--primary);
+  transform: translateY(-2px);
+}
+
+.unit-drag-handle {
+  color: var(--text-light);
+  font-size: 1.05rem;
+  margin-right: 0.2rem;
+  cursor: grab;
+  line-height: 1;
+}
+
+.unit-drag-handle:active {
+  cursor: grabbing;
+}
+
+.unit-move-btn {
+  padding: 0.1rem 0.35rem !important;
+  font-size: 0.7rem !important;
+  line-height: 1.1 !important;
+}
+
 .topic-group-title {
   display: flex;
   align-items: center;

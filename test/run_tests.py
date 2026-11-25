@@ -1625,6 +1625,16 @@ def run():
     sim_events.sort(key=lambda x: (x.get('startDate', ''), x.get('endDate', ''), x.get('title', '')))
     runner.assert_equal([e['title'] for e in sim_events], ['Swimming Carnival', 'Athletics Carnival', 'Strike Day', 'Graduation'], 'Blockout events sort strictly into chronological calendar order')
 
+    # -------------------------------------------------------------------------
+    # TEST 36: Unit Drag-and-Drop Reordering & Invalid Anchor Unpin/Test Date Reset
+    # -------------------------------------------------------------------------
+    print("\nTest 36: Unit Drag-and-Drop Reordering & Invalid Anchor Unpin/Test Date Reset")
+    runner.assert_true('reorderUnitGroup' in app_code, 'app.js implements reorderUnitGroup for moving entire units up and down')
+    runner.assert_true('validateAndClearInvalidAnchorsAfterReorder' in app_code, 'app.js implements validateAndClearInvalidAnchorsAfterReorder to clear invalid pins and test dates')
+    runner.assert_true('unit-drag-handle' in app_code, 'app.js renders unit-drag-handle on unit headers')
+    runner.assert_true('.unit-drag-handle' in planner_css, 'css/planner.css styles .unit-drag-handle')
+    runner.assert_true('unit-move-btn' in app_code, 'app.js renders ▲/▼ unit move buttons')
+
     print('\n==================================================')
     print(f'Test Results: {runner.passes} PASSED, {runner.fails} FAILED')
     print('==================================================\n')

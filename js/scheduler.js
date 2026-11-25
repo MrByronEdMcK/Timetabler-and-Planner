@@ -196,17 +196,31 @@ export const Scheduler = {
     candidateMilestones.forEach(m => {
       const windowLessons = lessons.slice(currentLessonCheckStart, m.lessonIndex);
       const windowSlotsCount = Math.max(0, m.targetSlotIdx - currentSlotCheckStart);
+      const isOutOfOrder = m.targetSlotIdx < currentSlotCheckStart;
 
-      if (m.isPinned && windowLessons.length > windowSlotsCount) {
-        // Upstream insertion created a slot deficit! Auto-unpin this downstream lesson!
-        m.lesson.isPinned = false;
-        delete m.lesson.pinnedDate;
-        delete m.lesson.pinnedPeriodId;
-        delete m.lesson.pinnedSlotKey;
+      if (isOutOfOrder || windowLessons.length > windowSlotsCount) {
+        if (m.isPinned) {
+          m.lesson.isPinned = false;
+          delete m.lesson.pinnedDate;
+          delete m.lesson.pinnedPeriodId;
+          delete m.lesson.pinnedSlotKey;
 
-        const classObj = state.classes.find(c => c.id === classId);
-        this.reanalysisStats.addUnpinned(classObj ? classObj.name : classId, m.lesson.title, m.lesson.id);
-        console.warn(`[SCHEDULER UNPIN] Lesson "${m.lesson.title}" was automatically unpinned because upstream insertion required ${windowLessons.length} lessons for ${windowSlotsCount} available slots.`);
+          const classObj = state.classes.find(c => c.id === classId);
+          this.reanalysisStats.addUnpinned(classObj ? classObj.name : classId, m.lesson.title, m.lesson.id);
+          console.warn(`[SCHEDULER UNPIN] Lesson "${m.lesson.title}" was automatically unpinned because sequence order or capacity required ${windowLessons.length} lessons for ${windowSlotsCount} available slots.`);
+        } else if (isOutOfOrder && m.lesson.isTestMilestone) {
+          delete m.lesson.testDate;
+          delete m.lesson.testPeriodId;
+          delete m.lesson.testSlotKey;
+
+          const classObj = state.classes.find(c => c.id === classId);
+          this.reanalysisStats.addUnpinned(classObj ? classObj.name : classId, `${m.lesson.title} (Test Date Cleared)`, m.lesson.id);
+          console.warn(`[SCHEDULER TEST DATE CLEARED] Test lesson "${m.lesson.title}" had an out-of-order test date after unit/lesson reordering; cleared test date.`);
+        } else {
+          milestones.push(m);
+          currentLessonCheckStart = m.lessonIndex + 1;
+          currentSlotCheckStart = Math.max(currentSlotCheckStart, m.targetSlotIdx + 1);
+        }
       } else {
         milestones.push(m);
         currentLessonCheckStart = m.lessonIndex + 1;

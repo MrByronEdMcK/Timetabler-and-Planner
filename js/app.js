@@ -1470,17 +1470,31 @@
       candidateMilestones.forEach(m => {
         const windowLessons = lessons.slice(currentLessonCheckStart, m.lessonIndex);
         const windowSlotsCount = Math.max(0, m.targetSlotIdx - currentSlotCheckStart);
+        const isOutOfOrder = m.targetSlotIdx < currentSlotCheckStart;
 
-        if (m.isPinned && windowLessons.length > windowSlotsCount) {
-          // Upstream insertion created a slot deficit! Auto-unpin this downstream lesson!
-          m.lesson.isPinned = false;
-          delete m.lesson.pinnedDate;
-          delete m.lesson.pinnedPeriodId;
-          delete m.lesson.pinnedSlotKey;
+        if (isOutOfOrder || windowLessons.length > windowSlotsCount) {
+          if (m.isPinned) {
+            m.lesson.isPinned = false;
+            delete m.lesson.pinnedDate;
+            delete m.lesson.pinnedPeriodId;
+            delete m.lesson.pinnedSlotKey;
 
-          const classObj = state.classes.find(c => c.id === classId);
-          this.reanalysisStats.addUnpinned(classObj ? classObj.name : classId, m.lesson.title, m.lesson.id);
-          console.warn(`[SCHEDULER UNPIN] Lesson "${m.lesson.title}" was automatically unpinned because upstream insertion required ${windowLessons.length} lessons for ${windowSlotsCount} available slots.`);
+            const classObj = state.classes.find(c => c.id === classId);
+            this.reanalysisStats.addUnpinned(classObj ? classObj.name : classId, m.lesson.title, m.lesson.id);
+            console.warn(`[SCHEDULER UNPIN] Lesson "${m.lesson.title}" was automatically unpinned because sequence order or capacity required ${windowLessons.length} lessons for ${windowSlotsCount} available slots.`);
+          } else if (isOutOfOrder && m.lesson.isTestMilestone) {
+            delete m.lesson.testDate;
+            delete m.lesson.testPeriodId;
+            delete m.lesson.testSlotKey;
+
+            const classObj = state.classes.find(c => c.id === classId);
+            this.reanalysisStats.addUnpinned(classObj ? classObj.name : classId, `${m.lesson.title} (Test Date Cleared)`, m.lesson.id);
+            console.warn(`[SCHEDULER TEST DATE CLEARED] Test lesson "${m.lesson.title}" had an out-of-order test date after unit/lesson reordering; cleared test date.`);
+          } else {
+            milestones.push(m);
+            currentLessonCheckStart = m.lessonIndex + 1;
+            currentSlotCheckStart = Math.max(currentSlotCheckStart, m.targetSlotIdx + 1);
+          }
         } else {
           milestones.push(m);
           currentLessonCheckStart = m.lessonIndex + 1;
@@ -2659,9 +2673,10 @@
 
       let html = '';
 
-      topicGroups.forEach((group) => {
-        const topicKey = `${this.selectedClassId}_${group.unitName}`;
-        const isCollapsed = !!this.collapsedTopics[topicKey];
+      topicGroups.forEach((group, groupIndex) => {
+        const topicKey = `${this.selectedClassId}_${group.unitName}_${groupIndex}`;
+        const collapseStateKey = `${this.selectedClassId}_${group.unitName}`;
+        const isCollapsed = !!this.collapsedTopics[collapseStateKey];
         const count = group.items.length;
         const startNum = group.items[0].originalIndex + 1;
         const endNum = group.items[group.items.length - 1].originalIndex + 1;
@@ -2686,14 +2701,19 @@
         }
 
         html += `
-          <div class="topic-group-container">
-            <div class="topic-group-header ${isCollapsed ? 'collapsed' : ''}" data-topic-key="${topicKey}">
+          <div class="topic-group-container" data-unit-group-index="${groupIndex}" data-unit-name="${group.unitName.replace(/"/g, '&quot;')}">
+            <div class="topic-group-header ${isCollapsed ? 'collapsed' : ''}" data-topic-key="${collapseStateKey}" data-unit-group-index="${groupIndex}" draggable="true">
               <div class="topic-group-title">
+                <span class="unit-drag-handle" title="Drag unit up or down to reorder sequence">⣿</span>
                 <span class="topic-toggle-icon">${isCollapsed ? '▶' : '▼'}</span>
                 <span>${group.unitName}</span>
                 <span class="topic-count-badge">${count} ${count === 1 ? 'Lesson' : 'Lessons'} (${numLabel})</span>
               </div>
-              <div style="display:flex; align-items:center; gap:0.5rem;">
+              <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+                <div style="display:inline-flex; gap:0.2rem; margin-right:0.15rem;">
+                  <button type="button" class="btn btn-secondary btn-xs unit-move-btn" data-dir="up" data-unit-group-index="${groupIndex}" ${groupIndex === 0 ? 'disabled style="opacity:0.35; cursor:not-allowed;"' : ''} title="Move unit up in sequence">▲</button>
+                  <button type="button" class="btn btn-secondary btn-xs unit-move-btn" data-dir="down" data-unit-group-index="${groupIndex}" ${groupIndex === topicGroups.length - 1 ? 'disabled style="opacity:0.35; cursor:not-allowed;"' : ''} title="Move unit down in sequence">▼</button>
+                </div>
                 <button type="button" class="btn btn-secondary btn-xs export-unit-btn" data-unit="${group.unitName}" title="Export this unit (${group.unitName}) to a JSON file" style="font-size:0.72rem; padding:0.15rem 0.5rem; line-height:1.2; font-weight:600;">📤 Export Unit</button>
                 <div class="copy-unit-wrapper" style="position:relative; display:inline-block;">
                   <button type="button" class="btn btn-secondary btn-xs copy-unit-btn" data-unit="${group.unitName}" title="Copy all lessons in this unit to another class" style="font-size:0.72rem; padding:0.15rem 0.5rem; line-height:1.2; font-weight:600;">📋 Copy Unit to Class ▼</button>
@@ -2879,7 +2899,7 @@
       const headers = container.querySelectorAll('.topic-group-header');
       headers.forEach(header => {
         header.addEventListener('click', (e) => {
-          if (e.target.closest('.copy-unit-btn') || e.target.closest('.copy-unit-dropdown') || e.target.closest('.export-unit-btn')) return;
+          if (e.target.closest('.copy-unit-btn') || e.target.closest('.copy-unit-dropdown') || e.target.closest('.export-unit-btn') || e.target.closest('.unit-move-btn')) return;
           const key = header.getAttribute('data-topic-key');
           this.collapsedTopics[key] = !this.collapsedTopics[key];
           this.renderLessonList();
@@ -2907,23 +2927,229 @@
       this.renderLessonList();
     },
 
+    validateAndClearInvalidAnchorsAfterReorder(classId, movedLessonIds = new Set()) {
+      const lessons = state.lessonPlans[classId] || [];
+      if (lessons.length === 0) return { clearedPins: [], clearedTests: [] };
+
+      const availableSlots = Scheduler.getAvailableSlots(classId);
+      const clearedPins = [];
+      const clearedTests = [];
+
+      // Clear any pins or test dates on lessons in the moved unit(s) or lessons whose anchor date is now out-of-order or exceeds available slots
+      let currentLessonCheckStart = 0;
+      let currentSlotCheckStart = 0;
+
+      lessons.forEach((lesson, idx) => {
+        const wasMoved = movedLessonIds.has(lesson.id);
+        const hasPin = Boolean(lesson.isPinned && (lesson.pinnedDate || lesson.pinnedSlotKey));
+        const hasTestDate = Boolean(lesson.isTestMilestone && (lesson.testDate || lesson.testSlotKey));
+
+        if (!hasPin && !hasTestDate) return;
+
+        let key = hasTestDate ? lesson.testSlotKey : lesson.pinnedSlotKey;
+        const targetDate = hasTestDate ? lesson.testDate : lesson.pinnedDate;
+        const targetPeriodId = hasTestDate ? lesson.testPeriodId : lesson.pinnedPeriodId;
+
+        if (!key && targetDate && targetPeriodId) {
+          key = `${targetDate}_${targetPeriodId}`;
+        }
+
+        let slotIdx = -1;
+        if (key && availableSlots.length > 0) {
+          slotIdx = availableSlots.findIndex(s => `${s.date}_${s.periodId}` === key);
+        }
+        if (slotIdx === -1 && targetDate && availableSlots.length > 0) {
+          if (targetPeriodId) {
+            slotIdx = availableSlots.findIndex(s => s.date === targetDate && s.periodId === targetPeriodId);
+          }
+          if (slotIdx === -1) {
+            slotIdx = availableSlots.findIndex(s => s.date === targetDate);
+          }
+          if (slotIdx === -1) {
+            slotIdx = availableSlots.findIndex(s => s.date >= targetDate);
+          }
+        }
+
+        const windowLessonsCount = idx - currentLessonCheckStart;
+        const windowSlotsCount = slotIdx >= 0 ? (slotIdx - currentSlotCheckStart) : -1;
+        const isOutOfOrder = slotIdx !== -1 && slotIdx < currentSlotCheckStart;
+        const exceedsCapacity = slotIdx !== -1 && windowLessonsCount > windowSlotsCount;
+
+        if (wasMoved || isOutOfOrder || exceedsCapacity) {
+          if (hasPin) {
+            lesson.isPinned = false;
+            delete lesson.pinnedDate;
+            delete lesson.pinnedPeriodId;
+            delete lesson.pinnedSlotKey;
+            clearedPins.push(lesson.title);
+          }
+          if (hasTestDate) {
+            // Keep isTestMilestone tag so user knows it's a test, but clear its invalid/shifted date so user can update it
+            delete lesson.testDate;
+            delete lesson.testPeriodId;
+            delete lesson.testSlotKey;
+            clearedTests.push(lesson.title);
+          }
+        } else if (slotIdx >= 0) {
+          currentLessonCheckStart = idx + 1;
+          currentSlotCheckStart = Math.max(currentSlotCheckStart, slotIdx + 1);
+        }
+      });
+
+      return { clearedPins, clearedTests };
+    },
+
+    reorderUnitGroup(fromGroupIndex, toGroupIndex) {
+      const lessons = state.lessonPlans[this.selectedClassId] || [];
+      if (lessons.length === 0) return;
+
+      // Build consecutive topic groups
+      const topicGroups = [];
+      let currentGroup = null;
+      lessons.forEach((lesson) => {
+        const unitName = (lesson.unit || 'General Curriculum').trim();
+        if (!currentGroup || currentGroup.unitName !== unitName) {
+          currentGroup = { unitName, lessons: [] };
+          topicGroups.push(currentGroup);
+        }
+        currentGroup.lessons.push(lesson);
+      });
+
+      if (
+        fromGroupIndex < 0 ||
+        fromGroupIndex >= topicGroups.length ||
+        toGroupIndex < 0 ||
+        toGroupIndex >= topicGroups.length ||
+        fromGroupIndex === toGroupIndex
+      ) {
+        return;
+      }
+
+      const [movedGroup] = topicGroups.splice(fromGroupIndex, 1);
+      topicGroups.splice(toGroupIndex, 0, movedGroup);
+
+      const movedLessonIds = new Set(movedGroup.lessons.map(l => l.id));
+      const newLessons = [];
+      topicGroups.forEach(g => newLessons.push(...g.lessons));
+      state.lessonPlans[this.selectedClassId] = newLessons;
+
+      const { clearedPins, clearedTests } = this.validateAndClearInvalidAnchorsAfterReorder(this.selectedClassId, movedLessonIds);
+      state.saveState();
+      this.renderLessonList();
+      refreshAllViews(false, true);
+
+      if (clearedPins.length > 0 || clearedTests.length > 0) {
+        const parts = [];
+        if (clearedPins.length > 0) parts.push(`${clearedPins.length} pinned lesson(s) unpinned`);
+        if (clearedTests.length > 0) parts.push(`${clearedTests.length} test date(s) cleared`);
+        showReanalysisSummaryToast(`Moved unit "${movedGroup.unitName}" • ${parts.join(' & ')}. Please re-pin or update test dates.`);
+      } else if (typeof showToastNotification === 'function') {
+        showToastNotification(`Moved unit "${movedGroup.unitName}"`);
+      }
+    },
+
     bindDragEvents() {
       const container = document.getElementById('lesson-list-container');
       if (!container) return;
 
+      // 1. Unit Move Up / Down buttons
+      const moveBtns = container.querySelectorAll('.unit-move-btn');
+      moveBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const groupIdx = parseInt(btn.getAttribute('data-unit-group-index'), 10);
+          const dir = btn.getAttribute('data-dir');
+          if (isNaN(groupIdx)) return;
+          const targetIdx = dir === 'up' ? groupIdx - 1 : groupIdx + 1;
+          this.reorderUnitGroup(groupIdx, targetIdx);
+        });
+      });
+
+      // 2. Unit Header Drag and Drop
+      const unitHeaders = container.querySelectorAll('.topic-group-header');
+      const unitContainers = container.querySelectorAll('.topic-group-container');
+
+      unitHeaders.forEach(header => {
+        header.addEventListener('dragstart', (e) => {
+          if (e.target.closest('.copy-unit-btn') || e.target.closest('.export-unit-btn') || e.target.closest('.unit-move-btn')) {
+            e.preventDefault();
+            return;
+          }
+          e.stopPropagation();
+          this.draggedUnitGroupIndex = parseInt(header.getAttribute('data-unit-group-index'), 10);
+          this.draggedIndex = null;
+          header.classList.add('dragging-unit');
+          if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            try { e.dataTransfer.setData('text/plain', `unit_${this.draggedUnitGroupIndex}`); } catch (err) {}
+          }
+        });
+
+        header.addEventListener('dragend', () => {
+          header.classList.remove('dragging-unit');
+          this.draggedUnitGroupIndex = null;
+          unitContainers.forEach(c => {
+            c.classList.remove('unit-drag-over-top', 'unit-drag-over-bottom');
+          });
+        });
+      });
+
+      unitContainers.forEach(unitBox => {
+        unitBox.addEventListener('dragover', (e) => {
+          if (this.draggedUnitGroupIndex === null || this.draggedUnitGroupIndex === undefined) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const targetGroupIdx = parseInt(unitBox.getAttribute('data-unit-group-index'), 10);
+          unitContainers.forEach(c => c.classList.remove('unit-drag-over-top', 'unit-drag-over-bottom'));
+          if (targetGroupIdx !== this.draggedUnitGroupIndex) {
+            if (targetGroupIdx < this.draggedUnitGroupIndex) {
+              unitBox.classList.add('unit-drag-over-top');
+            } else {
+              unitBox.classList.add('unit-drag-over-bottom');
+            }
+          }
+        });
+
+        unitBox.addEventListener('dragleave', (e) => {
+          if (this.draggedUnitGroupIndex === null || this.draggedUnitGroupIndex === undefined) return;
+          if (!unitBox.contains(e.relatedTarget)) {
+            unitBox.classList.remove('unit-drag-over-top', 'unit-drag-over-bottom');
+          }
+        });
+
+        unitBox.addEventListener('drop', (e) => {
+          if (this.draggedUnitGroupIndex === null || this.draggedUnitGroupIndex === undefined) return;
+          e.preventDefault();
+          e.stopPropagation();
+          unitContainers.forEach(c => c.classList.remove('unit-drag-over-top', 'unit-drag-over-bottom'));
+          const targetGroupIdx = parseInt(unitBox.getAttribute('data-unit-group-index'), 10);
+          const fromIdx = this.draggedUnitGroupIndex;
+          this.draggedUnitGroupIndex = null;
+          if (!isNaN(fromIdx) && !isNaN(targetGroupIdx) && fromIdx !== targetGroupIdx) {
+            this.reorderUnitGroup(fromIdx, targetGroupIdx);
+          }
+        });
+      });
+
+      // 3. Individual Lesson Card Drag and Drop
       const cards = container.querySelectorAll('.lesson-card');
       cards.forEach(card => {
         card.addEventListener('dragstart', (e) => {
+          e.stopPropagation();
+          this.draggedUnitGroupIndex = null;
           this.draggedIndex = parseInt(card.getAttribute('data-index'), 10);
           card.classList.add('dragging');
         });
 
         card.addEventListener('dragend', () => {
           card.classList.remove('dragging');
+          this.draggedIndex = null;
           cards.forEach(c => c.classList.remove('drag-over'));
         });
 
         card.addEventListener('dragover', (e) => {
+          if (this.draggedUnitGroupIndex !== null && this.draggedUnitGroupIndex !== undefined) return;
           e.preventDefault();
           card.classList.add('drag-over');
         });
@@ -2933,13 +3159,15 @@
         });
 
         card.addEventListener('drop', (e) => {
+          if (this.draggedUnitGroupIndex !== null && this.draggedUnitGroupIndex !== undefined) return;
           e.preventDefault();
           card.classList.remove('drag-over');
           const targetIndex = parseInt(card.getAttribute('data-index'), 10);
-          if (this.draggedIndex !== null && this.draggedIndex !== targetIndex) {
+          if (this.draggedIndex !== null && this.draggedIndex !== undefined && this.draggedIndex !== targetIndex) {
             const lessons = state.lessonPlans[this.selectedClassId] || [];
             const [movedItem] = lessons.splice(this.draggedIndex, 1);
             lessons.splice(targetIndex, 0, movedItem);
+            this.validateAndClearInvalidAnchorsAfterReorder(this.selectedClassId, new Set([movedItem.id]));
             state.saveState();
             this.renderLessonList();
             refreshAllViews(false, true);
