@@ -1,11 +1,12 @@
 /* ==========================================================================
-   Weekly Homework & Classwork Summary Manager UI
+   Weekly Homework, Classwork Summary & Whiteboard Display UI (View 5)
    ========================================================================== */
 
-import { state } from '../state.js';
+import { state, getClassCellStyles, showToastNotification, escapeHtml } from '../state.js';
 import { Scheduler } from '../scheduler.js';
 import { TermManager } from '../termManager.js';
 import '../timer.js';
+
 const ClassTimer = (typeof window !== 'undefined' && window.ClassTimer) ? window.ClassTimer : undefined;
 
 export const HomeworkUI = {
@@ -63,6 +64,38 @@ export const HomeworkUI = {
     this.renderWhiteboardContent();
   },
 
+  updateWhiteboardFontScale(scale, isManual = true) {
+    this.whiteboardFontScale = Math.max(0.7, Math.min(3.0, Math.round(scale * 20) / 20));
+    if (isManual) this.isManualFontScale = true;
+
+    const backdrop = document.getElementById('modal-whiteboard-backdrop');
+    if (backdrop) {
+      backdrop.style.setProperty('--wb-font-scale', this.whiteboardFontScale);
+    }
+
+    const label = document.getElementById('wb-zoom-label');
+    if (label) {
+      const pct = Math.round(this.whiteboardFontScale * 100);
+      label.textContent = `${pct}%${this.isManualFontScale ? '' : ' (Auto)'}`;
+    }
+  },
+
+  calculateAutoFontScale(totalItems, categoryCount = 1) {
+    const isBubbles = (this.whiteboardLayoutMode !== 'list');
+    if (isBubbles) {
+      if (totalItems <= 4) return 1.6;
+      if (totalItems <= 8) return 1.4;
+      if (totalItems <= 14) return 1.25;
+      if (totalItems <= 20) return 1.1;
+      return 1.0;
+    } else {
+      if (totalItems <= 3) return 1.5;
+      if (totalItems <= 6) return 1.3;
+      if (totalItems <= 10) return 1.15;
+      return 1.0;
+    }
+  },
+
   init() {
     if (state.classes.length > 0 && (!this.selectedClassId || this.selectedClassId === 'ALL')) {
       this.selectedClassId = state.classes[0].id;
@@ -86,11 +119,24 @@ export const HomeworkUI = {
     const currentTerm = TermManager.getTermForDate(currentDate) || state.terms[0];
     if (currentTerm) {
       this.selectedTermId = currentTerm.id;
-      const termStart = new Date(currentTerm.startDate);
-      const curr = new Date(currentDate);
-      const diffDays = Math.floor((curr - termStart) / (1000 * 60 * 60 * 24));
-      this.selectedWeekNum = Math.max(1, Math.min(TermManager.getTermWeeks(currentTerm), Math.floor(diffDays / 7) + 1));
+      const termStart = TermManager.parseLocalDate(currentTerm.startDate);
+      const curr = TermManager.parseLocalDate(currentDate);
+      if (termStart && curr) {
+        const diffDays = Math.round((curr - termStart) / (1000 * 60 * 60 * 24));
+        this.selectedWeekNum = Math.max(1, Math.min(TermManager.getTermWeeks(currentTerm), Math.floor(diffDays / 7) + 1));
+      }
     }
+
+    try {
+      if (typeof window !== 'undefined' && window.location) {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('testSeed') === '1') {
+          this.selectedTermId = 't1';
+          this.selectedWeekNum = 1;
+          this.selectedClassId = 'c_white';
+        }
+      }
+    } catch (e) {}
   },
 
   renderClassSelector() {
@@ -105,10 +151,11 @@ export const HomeworkUI = {
 
     state.classes.forEach(c => {
       const active = c.id === this.selectedClassId ? 'active' : '';
+      const cellStyle = getClassCellStyles(c.color, state.theme === 'dark');
       html += `
-        <button class="nav-btn ${active}" data-id="${c.id}" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">
-          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${c.color}; margin-right:4px;"></span>
-          ${c.name}
+        <button class="nav-btn ${active}" data-id="${escapeHtml(c.id)}" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">
+          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder}; margin-right:4px;"></span>
+          ${escapeHtml(c.name)}
         </button>
       `;
     });
@@ -123,7 +170,7 @@ export const HomeworkUI = {
 
     termSelect.innerHTML = state.terms.map(t => {
       const selected = t.id === this.selectedTermId ? 'selected' : '';
-      return `<option value="${t.id}" ${selected}>${t.name}</option>`;
+      return `<option value="${escapeHtml(t.id)}" ${selected}>${escapeHtml(t.name)}</option>`;
     }).join('');
 
     const term = state.terms.find(t => t.id === this.selectedTermId) || state.terms[0];
@@ -141,15 +188,17 @@ export const HomeworkUI = {
     const term = state.terms.find(t => t.id === this.selectedTermId) || state.terms[0];
     if (!term) return { startDateStr: '', endDateStr: '', label: '' };
 
-    const termStart = new Date(term.startDate);
+    const termStart = TermManager.parseLocalDate(term.startDate);
+    if (!termStart) return { startDateStr: '', endDateStr: '', label: '' };
+
     const weekStart = new Date(termStart);
     weekStart.setDate(termStart.getDate() + (this.selectedWeekNum - 1) * 7);
 
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 4);
 
-    const startDateStr = weekStart.toISOString().split('T')[0];
-    const endDateStr = weekEnd.toISOString().split('T')[0];
+    const startDateStr = TermManager.formatLocalDate(weekStart);
+    const endDateStr = TermManager.formatLocalDate(weekEnd);
 
     const label = `${term.name}, Week ${this.selectedWeekNum} (${TermManager.formatDisplayDate(startDateStr)} - ${TermManager.formatDisplayDate(endDateStr)})`;
 
@@ -212,8 +261,9 @@ export const HomeworkUI = {
     if (!lesson) return false;
     if (lesson.isTestMilestone || lesson.isAssessment || lesson.isTest) return true;
     const title = (lesson.title || '').trim().toLowerCase();
+    const unit = (lesson.unit || '').trim().toLowerCase();
     const regex = /\b(assessment|test|exam|sac|quiz)\b/i;
-    return regex.test(title);
+    return regex.test(title) || regex.test(unit);
   },
 
   aggregateTaskObjects(taskList) {
@@ -304,9 +354,9 @@ export const HomeworkUI = {
 
     if (scheduledEntries.length === 0) {
       container.innerHTML = `
-        <div style="text-align:center; padding: 3rem 1.5rem; color: var(--text-dim); background: rgba(30, 41, 59, 0.4); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">
+        <div class="homework-empty-state">
           <div style="font-size:2.5rem; margin-bottom:0.75rem;">📅</div>
-          <h3 style="font-weight:700; font-size:1.1rem; color:var(--text-main); margin-bottom:0.4rem;">No Scheduled Classes Found for ${selectedClassName} in ${weekRange.label}</h3>
+          <h3 style="font-weight:700; font-size:1.1rem; margin-bottom:0.4rem;">No Scheduled Classes Found for ${escapeHtml(selectedClassName)} in ${escapeHtml(weekRange.label)}</h3>
           <p style="font-size:0.85rem; max-width:500px; margin:0 auto;">
             Ensure class timetable slots are set up in <strong>"2. Timetable Rotation"</strong> and curriculum lesson plans are defined in <strong>"3. Curriculum & Lessons"</strong>.
           </p>
@@ -339,12 +389,12 @@ export const HomeworkUI = {
           else if (typeLower.includes('sheet') || typeLower.includes('work')) badgeClass = 'cw-badge-worksheets';
           else if (typeLower.includes('hand') || typeLower.includes('print')) badgeClass = 'cw-badge-handout';
 
-          const workText = cw.work || '(No description)';
-          const contentHtml = cw.link ? `<a href="${cw.link}" target="_blank" style="color:var(--primary-light); text-decoration:underline;" title="Open material link">${workText}</a>` : workText;
+          const workText = escapeHtml(cw.work || '(No description)');
+          const contentHtml = cw.link ? `<a href="${escapeHtml(cw.link)}" target="_blank" class="homework-material-link" title="Open material link">${workText}</a>` : workText;
 
           return `
             <div style="margin-bottom:0.4rem; font-size:0.88rem;">
-              <span class="cw-badge ${badgeClass}">${cw.type || 'Task'}</span>
+              <span class="cw-badge ${badgeClass}">${escapeHtml(cw.type || 'Task')}</span>
               <strong>${contentHtml}</strong>
             </div>
           `;
@@ -357,25 +407,27 @@ export const HomeworkUI = {
       const linkedClasses = state.getLinkedClasses(classObj.id);
       const hasLinked = linkedClasses.length > 0;
       const syncTileBtn = hasLinked ? `
-        <button type="button" class="btn btn-secondary btn-xs hw-card-sync-btn" data-class="${classObj.id}" data-lesson-id="${lesson.id}" style="font-size:0.75rem; padding:0.2rem 0.5rem; font-weight:700;" title="Sync homework tasks to ${linkedClasses.map(l => l.name).join(', ')}">
+        <button type="button" class="btn btn-secondary btn-xs hw-card-sync-btn" data-class="${escapeHtml(classObj.id)}" data-lesson-id="${escapeHtml(lesson.id)}" style="font-size:0.75rem; padding:0.2rem 0.5rem; font-weight:700;" title="Sync homework tasks to ${escapeHtml(linkedClasses.map(l => l.name).join(', '))}">
           🔄 Sync Tile
         </button>
       ` : '';
 
+      const cellStyle = getClassCellStyles(classObj.color, state.theme === 'dark');
+
       cardsHtml += `
-        <div class="homework-lesson-card" data-class="${classObj.id}" data-lesson-id="${lesson.id}" style="cursor:pointer;" title="Click to view/edit lesson plan & classwork">
+        <div class="homework-lesson-card" data-class="${escapeHtml(classObj.id)}" data-lesson-id="${escapeHtml(lesson.id)}" data-date="${escapeHtml(slot.date)}" data-period="${escapeHtml(slot.periodId)}" style="cursor:pointer;" title="Click to view/edit lesson plan & classwork">
           <div class="homework-card-header">
             <div>
               <div style="display:flex; align-items:center; gap:0.5rem;">
-                <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${classObj.color};"></span>
-                <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">${classObj.name}</span>
+                <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder};"></span>
+                <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">${escapeHtml(classObj.name)}</span>
               </div>
-              <div class="homework-lesson-title" style="margin-top:0.25rem;">${idx + 1}. ${lesson.title}</div>
-              <div style="font-size:0.75rem; color:var(--text-dim);">${lesson.unit || 'General Curriculum'}</div>
+              <div class="homework-lesson-title" style="margin-top:0.25rem;">${idx + 1}. ${escapeHtml(lesson.title)}</div>
+              <div style="font-size:0.75rem; color:var(--text-dim);">${escapeHtml(lesson.unit || 'General Curriculum')}</div>
             </div>
             <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0.35rem;">
               <div class="homework-slot-badge" style="text-align: right; line-height: 1.35; white-space: nowrap; padding: 0.35rem 0.75rem;">
-                <div>${dayName} ${slot.periodName}</div>
+                <div>${dayName} ${escapeHtml(slot.periodName)}</div>
                 <div style="font-size:0.75rem; opacity:0.9; font-weight:500;">(${TermManager.formatDisplayDate(slot.date)})</div>
               </div>
               ${syncTileBtn ? `<div style="display:flex; justify-content:flex-end; margin-top:0.25rem;">${syncTileBtn}</div>` : ''}
@@ -390,18 +442,18 @@ export const HomeworkUI = {
 
     container.innerHTML = `
       <div style="margin-bottom: 1.5rem;">
-        <h4 style="font-size:1rem; font-weight:700; margin-bottom:0.75rem; color:var(--primary-light);">
-          Scheduled Lessons & Classwork for ${selectedClassName} — ${weekRange.label} (${scheduledEntries.length} Lesson Period/s)
+        <h4 class="homework-section-title">
+          Scheduled Lessons & Classwork for ${escapeHtml(selectedClassName)} — ${escapeHtml(weekRange.label)} (${scheduledEntries.length} Lesson Period/s)
         </h4>
         <div class="homework-grid">
           ${cardsHtml}
         </div>
       </div>
 
-      <div class="homework-summary-wrapper" style="margin-top:2rem; background: var(--bg-card-dark, rgba(30, 41, 59, 0.85)); padding:1.25rem; border-radius:var(--radius-md); border:1px solid var(--border-color);">
+      <div class="homework-summary-wrapper">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
           <div style="font-weight:700; font-size:0.95rem; color:var(--text-main); display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-            <span>Formatted Homework Summary for ${selectedClassName}</span>
+            <span>Formatted Homework Summary for ${escapeHtml(selectedClassName)}</span>
           </div>
           <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
             <div style="display:inline-flex; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); background:var(--bg-subtle, rgba(15,23,42,0.4));">
@@ -415,46 +467,11 @@ export const HomeworkUI = {
           </div>
         </div>
 
-        <div id="homework-summary-markdown-box" class="homework-summary-rendered-box" style="user-select: text; -webkit-user-select: text; background: rgba(15, 23, 42, 0.6); padding: 1.1rem 1.35rem; border-radius: 8px; border: 1px solid var(--border-color); color: var(--text-main); font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; font-size: 0.92rem;">
+        <div id="homework-summary-markdown-box" class="homework-summary-rendered-box">
           ${renderedMarkdownHTML}
         </div>
       </div>
     `;
-  },
-
-  whiteboardFontScale: 1.0,
-  isManualFontScale: false,
-
-  updateWhiteboardFontScale(scale, isManual = true) {
-    this.whiteboardFontScale = Math.max(0.7, Math.min(3.0, Math.round(scale * 20) / 20));
-    if (isManual) this.isManualFontScale = true;
-
-    const backdrop = document.getElementById('modal-whiteboard-backdrop');
-    if (backdrop) {
-      backdrop.style.setProperty('--wb-font-scale', this.whiteboardFontScale);
-    }
-
-    const label = document.getElementById('wb-zoom-label');
-    if (label) {
-      const pct = Math.round(this.whiteboardFontScale * 100);
-      label.textContent = `${pct}%${this.isManualFontScale ? '' : ' (Auto)'}`;
-    }
-  },
-
-  calculateAutoFontScale(totalItems, categoryCount = 1) {
-    const isBubbles = (this.whiteboardLayoutMode !== 'list');
-    if (isBubbles) {
-      if (totalItems <= 4) return 1.6;
-      if (totalItems <= 8) return 1.4;
-      if (totalItems <= 14) return 1.25;
-      if (totalItems <= 20) return 1.1;
-      return 1.0;
-    } else {
-      if (totalItems <= 3) return 1.5;
-      if (totalItems <= 6) return 1.3;
-      if (totalItems <= 10) return 1.15;
-      return 1.0;
-    }
   },
 
   openWhiteboardModal() {
@@ -501,7 +518,7 @@ export const HomeworkUI = {
     if (scheduledEntries.length === 0) {
       if (progressButtonsContainer) progressButtonsContainer.innerHTML = '';
       if (bodyEl) {
-        bodyEl.innerHTML = `<div style="text-align:center; padding:4rem; font-size:1.5rem; color:#94a3b8;">No scheduled lessons or classwork found for ${selectedClassName} this week.</div>`;
+        bodyEl.innerHTML = `<div style="text-align:center; padding:4rem; font-size:1.5rem; color:#94a3b8;">No scheduled lessons or classwork found for ${escapeHtml(selectedClassName)} this week.</div>`;
       }
       return;
     }
@@ -565,7 +582,7 @@ export const HomeworkUI = {
       let wbHtml = `<div class="whiteboard-cards-grid ${isBubbleLayout ? 'layout-bubbles' : 'layout-list'}">`;
 
       const cardsData = visibleEntries.map(entry => {
-        const { slot, lesson, classObj } = entry;
+        const { slot, lesson } = entry;
         const classworkItems = this.getFormattedClassworkForLesson(lesson);
 
         const days = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
@@ -603,7 +620,7 @@ export const HomeworkUI = {
             anyTasksInWeek = true;
             const testTitle = (lesson.title && !lesson.title.toLowerCase().startsWith('lesson')) ? lesson.title : 'Test';
             cardBodyHtml = `
-              <div class="wb-compact-badge wb-test-badge">${testTitle}</div>
+              <div class="wb-compact-badge wb-test-badge">${escapeHtml(testTitle)}</div>
             `;
           }
         } else {
@@ -611,9 +628,9 @@ export const HomeworkUI = {
           let testHeaderHtml = '';
           if (isAssessment) {
             const testTitle = (lesson.title && !lesson.title.toLowerCase().startsWith('lesson')) ? lesson.title : 'Test';
-            testHeaderHtml = `<div class="wb-compact-badge wb-test-badge" style="margin-bottom:calc(0.4rem * var(--wb-font-scale, 1));">${testTitle}</div>`;
+            testHeaderHtml = `<div class="wb-compact-badge wb-test-badge" style="margin-bottom:calc(0.4rem * var(--wb-font-scale, 1));">${escapeHtml(testTitle)}</div>`;
           }
-          anyTasksInWeek = true;
+
           if (isBubbleLayout) {
             const bubbleGroups = catKeys.map(catKey => {
               const items = lessonGrouped[catKey];
@@ -624,29 +641,29 @@ export const HomeworkUI = {
                 if (bullet.type === 'chapter') {
                   const subChips = bullet.items.map(it => {
                     if (it.link) {
-                      return `<span class="wb-subitem-chip"><a href="${it.link}" target="_blank" class="wb-link" title="Open link">${it.work}</a></span>`;
+                      return `<span class="wb-subitem-chip"><a href="${escapeHtml(it.link)}" target="_blank" class="wb-link" title="Open link">${escapeHtml(it.work)}</a></span>`;
                     }
-                    return `<span class="wb-subitem-chip">${it.work}</span>`;
+                    return `<span class="wb-subitem-chip">${escapeHtml(it.work)}</span>`;
                   }).join('');
                   return `
                     <div class="whiteboard-bubble-group wb-chapter-bubble">
-                      <div class="wb-group-prefix wb-chapter-title">${bullet.prefix}</div>
+                      <div class="wb-group-prefix wb-chapter-title">${escapeHtml(bullet.prefix)}</div>
                       <div class="wb-chips-row">${subChips}</div>
                     </div>
                   `;
                 } else {
                   return bullet.items.map(it => {
                     if (it.link) {
-                      return `<span class="wb-subitem-chip"><a href="${it.link}" target="_blank" class="wb-link" title="Open link">${it.work}</a></span>`;
+                      return `<span class="wb-subitem-chip"><a href="${escapeHtml(it.link)}" target="_blank" class="wb-link" title="Open link">${escapeHtml(it.work)}</a></span>`;
                     }
-                    return `<span class="wb-subitem-chip">${it.work}</span>`;
+                    return `<span class="wb-subitem-chip">${escapeHtml(it.work)}</span>`;
                   }).join('');
                 }
               }).join('');
 
               return `
                 <div class="whiteboard-bubble-group">
-                  <div class="wb-group-prefix">${catKey}</div>
+                  <div class="wb-group-prefix">${escapeHtml(catKey)}</div>
                   <div class="wb-chips-row">${chipsHtml}</div>
                 </div>
               `;
@@ -665,24 +682,24 @@ export const HomeworkUI = {
                 if (bullet.type === 'chapter') {
                   const formattedSubItems = bullet.items.map(it => {
                     if (it.link) {
-                      return `<a href="${it.link}" target="_blank" class="wb-link" title="Open link for ${it.work}">${it.work}</a>`;
+                      return `<a href="${escapeHtml(it.link)}" target="_blank" class="wb-link" title="Open link for ${escapeHtml(it.work)}">${escapeHtml(it.work)}</a>`;
                     }
-                    return `<span>${it.work}</span>`;
+                    return `<span>${escapeHtml(it.work)}</span>`;
                   }).join(', ');
-                  lineContent = `<span>${bullet.prefix}${bullet.items.length > 0 ? ': ' : ''}</span>${formattedSubItems}`;
+                  lineContent = `<span>${escapeHtml(bullet.prefix)}${bullet.items.length > 0 ? ': ' : ''}</span>${formattedSubItems}`;
                 } else {
                   lineContent = bullet.items.map(it => {
                     if (it.link) {
-                      return `<a href="${it.link}" target="_blank" class="wb-link" title="Open link for ${it.work}">${it.work}</a>`;
+                      return `<a href="${escapeHtml(it.link)}" target="_blank" class="wb-link" title="Open link for ${escapeHtml(it.work)}">${escapeHtml(it.work)}</a>`;
                     }
-                    return `<span>${it.work}</span>`;
+                    return `<span>${escapeHtml(it.work)}</span>`;
                   }).join(', ');
                 }
 
                 itemsListHtml += `
                   <div class="whiteboard-work-item">
                     <span class="wb-bullet">•</span>
-                    <div><strong style="color:var(--text-main);">${catKey}</strong> - ${lineContent}</div>
+                    <div><strong style="color:var(--text-main);">${escapeHtml(catKey)}</strong> - ${lineContent}</div>
                   </div>
                 `;
               });
@@ -694,14 +711,14 @@ export const HomeworkUI = {
 
         const cardHtml = `
           <div class="${cardClass}">
-            <button type="button" class="wb-tile-hide-btn" data-lesson-id="${lesson.id}" title="Hide this lesson" aria-label="Hide lesson">✕</button>
+            <button type="button" class="wb-tile-hide-btn" data-lesson-id="${escapeHtml(lesson.id)}" title="Hide this lesson" aria-label="Hide lesson">✕</button>
             <div class="whiteboard-type-header">
-              <div style="display:flex; align-items:center; gap:0.5rem; white-space:nowrap;" title="${lesson.title ? lesson.title.trim() : lessonDisplayTitle}">
+              <div style="display:flex; align-items:center; gap:0.5rem; white-space:nowrap;" title="${escapeHtml(lesson.title ? lesson.title.trim() : lessonDisplayTitle)}">
                 <span>${lessonDisplayTitle}</span>
               </div>
               <div style="display:flex; align-items:center; white-space:nowrap;">
                 <span class="wb-card-slot-badge" title="${TermManager.formatDisplayDate(slot.date)}">
-                  ${dayName} ${slot.periodName}
+                  ${dayName} ${escapeHtml(slot.periodName)}
                 </span>
               </div>
             </div>
@@ -737,7 +754,7 @@ export const HomeworkUI = {
 
       if (!anyTasksInWeek && visibleEntries.length > 0 && totalWorkItemsCount === 0) {
         if (bodyEl) {
-          bodyEl.innerHTML = `<div style="text-align:center; padding:4rem; font-size:1.4rem; color:#94a3b8;">No classwork tasks recorded for ${selectedClassName} for the selected lesson(s).</div>`;
+          bodyEl.innerHTML = `<div style="text-align:center; padding:4rem; font-size:1.4rem; color:#94a3b8;">No classwork tasks recorded for ${escapeHtml(selectedClassName)} for the selected lesson(s).</div>`;
         }
         return;
       }
@@ -761,12 +778,14 @@ export const HomeworkUI = {
       items.forEach(item => {
         const typeKey = (item.type || 'General Work').trim();
         if (!groupedByType[typeKey]) groupedByType[typeKey] = [];
-        groupedByType[typeKey].push({
-          work: item.work || '',
-          link: item.link || '',
-          lessonTitle: entry.lesson.title,
-          className: entry.classObj.name
-        });
+        if (item.work && item.work.trim()) {
+          groupedByType[typeKey].push({
+            work: item.work || '',
+            link: item.link || '',
+            lessonTitle: entry.lesson.title,
+            className: entry.classObj.name
+          });
+        }
       });
     });
 
@@ -774,7 +793,7 @@ export const HomeworkUI = {
 
     if (typeKeys.length === 0) {
       if (bodyEl) {
-        bodyEl.innerHTML = `<div style="text-align:center; padding:4rem; font-size:1.4rem; color:#94a3b8;">No classwork tasks recorded for ${selectedClassName} for the selected lesson(s).</div>`;
+        bodyEl.innerHTML = `<div style="text-align:center; padding:4rem; font-size:1.4rem; color:#94a3b8;">No classwork tasks recorded for ${escapeHtml(selectedClassName)} for the selected lesson(s).</div>`;
       }
       return;
     }
@@ -788,37 +807,29 @@ export const HomeworkUI = {
       const structured = this.aggregateTaskObjects(items);
       totalWorkItemsCount += structured.length;
 
-      let icon = '📌';
-      const keyLower = typeKey.toLowerCase();
-      if (keyLower.includes('note')) icon = '📝';
-      else if (keyLower.includes('text') || keyLower.includes('book')) icon = '📖';
-      else if (keyLower.includes('sheet') || keyLower.includes('work')) icon = '📄';
-      else if (keyLower.includes('hand') || keyLower.includes('print')) icon = '📑';
-
       let itemsContentHtml = '';
 
       if (isBubbleLayout) {
-        // Bubbled Flow & Horizontal Chips
         const bubblesHtml = structured.map(bullet => {
           if (bullet.type === 'chapter') {
             const chipsHtml = bullet.items.map(it => {
               if (it.link) {
-                return `<span class="wb-subitem-chip"><a href="${it.link}" target="_blank" class="wb-link" title="Open link">${it.work}</a></span>`;
+                return `<span class="wb-subitem-chip"><a href="${escapeHtml(it.link)}" target="_blank" class="wb-link" title="Open link">${escapeHtml(it.work)}</a></span>`;
               }
-              return `<span class="wb-subitem-chip">${it.work}</span>`;
+              return `<span class="wb-subitem-chip">${escapeHtml(it.work)}</span>`;
             }).join('');
 
             return `
               <div class="whiteboard-bubble-group wb-chapter-bubble">
-                <div class="wb-group-prefix wb-chapter-title">${bullet.prefix}</div>
+                <div class="wb-group-prefix wb-chapter-title">${escapeHtml(bullet.prefix)}</div>
                 <div class="wb-chips-row">${chipsHtml}</div>
               </div>
             `;
           } else {
             const tasksHtml = bullet.items.map(it => {
               const workContent = it.link
-                ? `<a href="${it.link}" target="_blank" class="wb-link" title="Open link">${it.work}</a>`
-                : `<span>${it.work}</span>`;
+                ? `<a href="${escapeHtml(it.link)}" target="_blank" class="wb-link" title="Open link">${escapeHtml(it.work)}</a>`
+                : `<span>${escapeHtml(it.work)}</span>`;
               return `
                 <div class="whiteboard-task-bubble">
                   <span class="wb-bullet">•</span>
@@ -832,25 +843,24 @@ export const HomeworkUI = {
 
         itemsContentHtml = `<div class="whiteboard-items-flow">${bubblesHtml}</div>`;
       } else {
-        // Classic Vertical List
         let itemsListHtml = '';
         structured.forEach(bullet => {
           let lineContent = '';
           if (bullet.type === 'chapter') {
             const formattedSubItems = bullet.items.map(it => {
               if (it.link) {
-                return `<a href="${it.link}" target="_blank" class="wb-link" title="Open link for ${it.work}">${it.work}</a>`;
+                return `<a href="${escapeHtml(it.link)}" target="_blank" class="wb-link" title="Open link for ${escapeHtml(it.work)}">${escapeHtml(it.work)}</a>`;
               }
-              return `<span>${it.work}</span>`;
+              return `<span>${escapeHtml(it.work)}</span>`;
             }).join(', ');
 
-            lineContent = `<span>${bullet.prefix}${bullet.items.length > 0 ? ': ' : ''}</span>${formattedSubItems}`;
+            lineContent = `<span>${escapeHtml(bullet.prefix)}${bullet.items.length > 0 ? ': ' : ''}</span>${formattedSubItems}`;
           } else {
             lineContent = bullet.items.map(it => {
               if (it.link) {
-                return `<a href="${it.link}" target="_blank" class="wb-link" title="Open link for ${it.work}">${it.work}</a>`;
+                return `<a href="${escapeHtml(it.link)}" target="_blank" class="wb-link" title="Open link for ${escapeHtml(it.work)}">${escapeHtml(it.work)}</a>`;
               }
-              return `<span>${it.work}</span>`;
+              return `<span>${escapeHtml(it.work)}</span>`;
             }).join(', ');
           }
 
@@ -869,7 +879,7 @@ export const HomeworkUI = {
         <div class="whiteboard-card">
           <div class="whiteboard-type-header">
             <div style="display:flex; align-items:center; gap:0.5rem;">
-              <span>${typeKey}</span>
+              <span>${escapeHtml(typeKey)}</span>
             </div>
           </div>
           ${itemsContentHtml}
@@ -1125,22 +1135,22 @@ export const HomeworkUI = {
             if (bullet.type === 'chapter') {
               const sub = bullet.items.map(it => {
                 if (it.link) {
-                  return `<a href="${it.link}" target="_blank" class="homework-summary-link" style="color: #0284c7; text-decoration: underline; font-weight: 500;">${it.work}</a>`;
+                  return `<a href="${escapeHtml(it.link)}" target="_blank" class="homework-summary-link" style="color: #0284c7; text-decoration: underline; font-weight: 500;">${escapeHtml(it.work)}</a>`;
                 }
-                return it.work;
+                return escapeHtml(it.work);
               }).join(', ');
-              return `${bullet.prefix}${bullet.items.length > 0 ? ': ' : ''}${sub}`;
+              return `${escapeHtml(bullet.prefix)}${bullet.items.length > 0 ? ': ' : ''}${sub}`;
             } else {
               return bullet.items.map(it => {
                 if (it.link) {
-                  return `<a href="${it.link}" target="_blank" class="homework-summary-link" style="color: #0284c7; text-decoration: underline; font-weight: 500;">${it.work}</a>`;
+                  return `<a href="${escapeHtml(it.link)}" target="_blank" class="homework-summary-link" style="color: #0284c7; text-decoration: underline; font-weight: 500;">${escapeHtml(it.work)}</a>`;
                 }
-                return it.work;
+                return escapeHtml(it.work);
               }).join(', ');
             }
           }).join(' | ');
 
-          blockHtml += `<div style="margin-bottom: 0.2rem; padding-left: 0.25rem;"><strong>${cat}</strong> - ${tasksFormatted}</div>`;
+          blockHtml += `<div style="margin-bottom: 0.2rem; padding-left: 0.25rem;"><strong>${escapeHtml(cat)}</strong> - ${tasksFormatted}</div>`;
         });
 
         blockHtml += `</div>`;
@@ -1152,7 +1162,7 @@ export const HomeworkUI = {
       }
 
       let html = '<div style="font-family: system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.6;">';
-      html += `<div style="margin-bottom: 0.35rem; font-weight: 700;">${selectedClassName} Homework:</div>`;
+      html += `<div style="margin-bottom: 0.35rem; font-weight: 700;">${escapeHtml(selectedClassName)} Homework:</div>`;
       html += lessonBlocksHtml.join('');
 
       if (links.length > 0) {
@@ -1165,7 +1175,7 @@ export const HomeworkUI = {
 
         html += '<div style="margin-top: 0.65rem; margin-bottom: 0.25rem; font-weight: 700;">Links:</div>';
         uniqueLinks.forEach(l => {
-          html += `<div style="margin-bottom: 0.2rem;">• ${l.type} (${l.name}): <a href="${l.url}" target="_blank" class="homework-summary-link" style="color: #0284c7; text-decoration: underline; font-weight: 500;">${l.url}</a></div>`;
+          html += `<div style="margin-bottom: 0.2rem;">• ${escapeHtml(l.type)} (${escapeHtml(l.name)}): <a href="${escapeHtml(l.url)}" target="_blank" class="homework-summary-link" style="color: #0284c7; text-decoration: underline; font-weight: 500;">${escapeHtml(l.url)}</a></div>`;
         });
       }
 
@@ -1204,17 +1214,17 @@ export const HomeworkUI = {
     if (keys.length === 0) return '<div>(No classwork tasks recorded for this week)</div>';
 
     let html = '<div style="font-family: system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.6;">';
-    html += `<div style="margin-bottom: 0.25rem; font-weight: 700;">${selectedClassName} Homework:</div>`;
+    html += `<div style="margin-bottom: 0.25rem; font-weight: 700;">${escapeHtml(selectedClassName)} Homework:</div>`;
 
     keys.forEach((key) => {
-      html += `<div style="margin-top: 0.5rem; margin-bottom: 0.35rem; font-weight: 700;">${key}:</div>`;
+      html += `<div style="margin-top: 0.5rem; margin-bottom: 0.35rem; font-weight: 700;">${escapeHtml(key)}:</div>`;
       const structured = this.aggregateTaskObjects(grouped[key]);
       structured.forEach(bullet => {
         if (bullet.type === 'chapter') {
-          const subContent = bullet.items.map(it => it.work).join(', ');
-          html += `<div style="margin-bottom: 0.2rem;">• ${bullet.prefix}${bullet.items.length > 0 ? ': ' : ''}${subContent}</div>`;
+          const subContent = bullet.items.map(it => escapeHtml(it.work)).join(', ');
+          html += `<div style="margin-bottom: 0.2rem;">• ${escapeHtml(bullet.prefix)}${bullet.items.length > 0 ? ': ' : ''}${subContent}</div>`;
         } else {
-          const subContent = bullet.items.map(it => it.work).join(', ');
+          const subContent = bullet.items.map(it => escapeHtml(it.work)).join(', ');
           html += `<div style="margin-bottom: 0.2rem;">• ${subContent}</div>`;
         }
       });
@@ -1231,7 +1241,7 @@ export const HomeworkUI = {
 
       html += '<div style="margin-top: 0.5rem; margin-bottom: 0.25rem; font-weight: 700;">Links:</div>';
       uniqueLinks.forEach(l => {
-        html += `<div style="margin-bottom: 0.2rem;">• ${l.type} (${l.name}): <a href="${l.url}" target="_blank" class="homework-summary-link" style="color: #0284c7; text-decoration: underline; font-weight: 500;">${l.url}</a></div>`;
+        html += `<div style="margin-bottom: 0.2rem;">• ${escapeHtml(l.type)} (${escapeHtml(l.name)}): <a href="${escapeHtml(l.url)}" target="_blank" class="homework-summary-link" style="color: #0284c7; text-decoration: underline; font-weight: 500;">${escapeHtml(l.url)}</a></div>`;
       });
     }
 
@@ -1252,8 +1262,7 @@ export const HomeworkUI = {
       });
 
       navigator.clipboard.write([item]).then(() => {
-        if (window.showToastNotification) window.showToastNotification('📋 Homework summary copied with hyperlinked materials!');
-        else alert('📋 Homework summary copied with hyperlinked materials!');
+        showToastNotification('📋 Homework summary copied with hyperlinked materials!');
       }).catch(() => {
         this.fallbackCopyText(plainText);
       });
@@ -1272,7 +1281,7 @@ export const HomeworkUI = {
     textArea.select();
     try {
       document.execCommand('copy');
-      alert('📋 Homework summary copied to clipboard!');
+      showToastNotification('📋 Homework summary copied to clipboard!');
     } catch (err) {
       alert('Copy failed. Please copy text manually.');
     }
@@ -1313,6 +1322,9 @@ export const HomeworkUI = {
   },
 
   bindEvents() {
+    if (this._eventsBound) return;
+    this._eventsBound = true;
+
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('#homework-class-selector .nav-btn');
       if (btn) {
@@ -1328,60 +1340,192 @@ export const HomeworkUI = {
             ClassTimer.updateDOM();
           }
         }
+        return;
       }
-    });
 
-
-
-    // Font zoom & layout/grouping toggle buttons handler
-    document.addEventListener('click', (e) => {
       if (e.target.id === 'btn-toggle-wb-layout' || e.target.closest('#btn-toggle-wb-layout')) {
         this.toggleWhiteboardLayout();
-      } else if (e.target.id === 'btn-toggle-wb-grouping' || e.target.closest('#btn-toggle-wb-grouping')) {
+        return;
+      }
+      if (e.target.id === 'btn-toggle-wb-grouping' || e.target.closest('#btn-toggle-wb-grouping')) {
         this.toggleGroupingMode();
-      } else if (e.target.id === 'btn-wb-zoom-in' || e.target.closest('#btn-wb-zoom-in')) {
+        return;
+      }
+      if (e.target.id === 'btn-wb-zoom-in' || e.target.closest('#btn-wb-zoom-in')) {
         this.updateWhiteboardFontScale(this.whiteboardFontScale + 0.2, true);
-      } else if (e.target.id === 'btn-wb-zoom-out' || e.target.closest('#btn-wb-zoom-out')) {
+        return;
+      }
+      if (e.target.id === 'btn-wb-zoom-out' || e.target.closest('#btn-wb-zoom-out')) {
         this.updateWhiteboardFontScale(this.whiteboardFontScale - 0.2, true);
-      } else if (e.target.id === 'btn-wb-zoom-auto' || e.target.closest('#btn-wb-zoom-auto')) {
+        return;
+      }
+      if (e.target.id === 'btn-wb-zoom-auto' || e.target.closest('#btn-wb-zoom-auto')) {
         this.isManualFontScale = false;
         this.renderWhiteboardContent();
-      } else if (e.target.id === 'btn-wb-collapse-bar' || e.target.closest('#btn-wb-collapse-bar')) {
-        this.toggleProgressBar(true);
-      } else if (e.target.id === 'btn-wb-expand-bar' || e.target.closest('#btn-wb-expand-bar')) {
-        this.toggleProgressBar(false);
+        return;
       }
-    });
-
-    // View 5 summary grouping buttons handler
-    document.addEventListener('click', (e) => {
+      if (e.target.id === 'btn-wb-collapse-bar' || e.target.closest('#btn-wb-collapse-bar')) {
+        this.toggleProgressBar(true);
+        return;
+      }
+      if (e.target.id === 'btn-wb-expand-bar' || e.target.closest('#btn-wb-expand-bar')) {
+        this.toggleProgressBar(false);
+        return;
+      }
       if (e.target.closest('#btn-hw-group-category')) {
         this.setGroupingMode('category');
-      } else if (e.target.closest('#btn-hw-group-lesson')) {
-        this.setGroupingMode('lesson');
+        return;
       }
-    });
+      if (e.target.closest('#btn-hw-group-lesson')) {
+        this.setGroupingMode('lesson');
+        return;
+      }
 
-    // Click on homework lesson card to open Lesson Plan Edit modal
-    document.addEventListener('click', (e) => {
-      if (e.target.closest('.hw-card-sync-btn')) return;
+      // Tile Sync Button Handler
+      const syncBtn = e.target.closest('.hw-card-sync-btn');
+      if (syncBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const classId = syncBtn.getAttribute('data-class');
+        const lessonId = syncBtn.getAttribute('data-lesson-id');
+        if (classId && lessonId) {
+          const lesson = Scheduler.resolveLessonOrMerged(classId, lessonId);
+          const linked = state.getLinkedClasses(classId);
+          if (lesson && linked.length > 0) {
+            if (lesson.isMerged && Array.isArray(lesson.mergedLessonIds)) {
+              const rawLessons = state.lessonPlans[classId] || [];
+              lesson.mergedLessonIds.forEach(mId => {
+                const subL = rawLessons.find(l => l.id === mId);
+                if (subL) {
+                  linked.forEach(targetClass => state.syncLinkedLesson(classId, subL, targetClass.id));
+                }
+              });
+            } else {
+              linked.forEach(targetClass => {
+                state.syncLinkedLesson(classId, lesson, targetClass.id);
+              });
+            }
+            const names = linked.map(l => l.name).join(', ');
+            showToastNotification(`✅ Synced "${lesson.title}" to ${names}!`);
+            syncBtn.disabled = true;
+            syncBtn.innerHTML = `✅ Synced`;
+            syncBtn.style.opacity = '0.6';
+            syncBtn.style.cursor = 'not-allowed';
+          }
+        }
+        return;
+      }
 
+      // Click on homework lesson card: open LessonViewer for merged lessons (with 2 edit buttons) or Edit Modal for single lessons
       const card = e.target.closest('.homework-lesson-card');
-
       if (card && !e.target.closest('a')) {
         const classId = card.getAttribute('data-class');
         const lessonId = card.getAttribute('data-lesson-id');
+        const dateStr = card.getAttribute('data-date');
+        const periodId = card.getAttribute('data-period');
         if (classId && lessonId) {
           const classObj = state.classes.find(c => c.id === classId);
-          const lessons = state.lessonPlans[classId] || [];
-          const lesson = lessons.find(l => l.id === lessonId);
+          const lesson = Scheduler.resolveLessonOrMerged(classId, lessonId);
           if (lesson && classObj) {
             if (window.LessonUI) window.LessonUI.selectedClassId = classId;
-            if (window.LessonUI) window.LessonUI.openEditLessonModal(lessonId);
+            if (lesson.isMerged && window.LessonViewer) {
+              const periodObj = state.periods.find(p => p.id === periodId);
+              const term = TermManager.getTermForDate(dateStr);
+              window.LessonViewer.open(lesson, classObj, {
+                date: dateStr || '',
+                termName: term ? term.name : '',
+                periodId: periodId || '',
+                periodName: periodObj ? periodObj.name : ''
+              });
+            } else if (window.LessonUI) {
+              window.LessonUI.openEditLessonModal(lesson.id);
+            }
           }
+        }
+        return;
+      }
+
+      // Whiteboard hide tile & restore buttons handler
+      const hideBtn = e.target.closest('.wb-tile-hide-btn');
+      if (hideBtn) {
+        e.stopPropagation();
+        const lessonId = hideBtn.getAttribute('data-lesson-id');
+        if (lessonId) {
+          this.hiddenLessonIds = this.hiddenLessonIds || new Set();
+          this.hiddenLessonIds.add(lessonId);
+          this.renderWhiteboardContent();
+        }
+        return;
+      }
+
+      const unhideBtn = e.target.closest('#btn-wb-unhide-all, .btn-wb-unhide-all');
+      if (unhideBtn) {
+        e.stopPropagation();
+        if (this.hiddenLessonIds) this.hiddenLessonIds.clear();
+        this.renderWhiteboardContent();
+        return;
+      }
+
+      const limitBtn = e.target.closest('.wb-progress-btn');
+      if (limitBtn) {
+        const limitVal = limitBtn.getAttribute('data-limit');
+        this.coveredLessonLimit = (limitVal === 'all') ? null : parseInt(limitVal, 10);
+        if (limitVal === 'all' && this.hiddenLessonIds) {
+          this.hiddenLessonIds.clear();
+        }
+        this.renderWhiteboardContent();
+        return;
+      }
+
+      const exitBtn = e.target.closest('#btn-exit-whiteboard') || e.target.closest('#modal-whiteboard-backdrop .modal-close');
+      const backdrop = document.getElementById('modal-whiteboard-backdrop');
+      if (exitBtn || (e.target === backdrop && backdrop && backdrop.classList.contains('active'))) {
+        if (typeof ClassTimer !== 'undefined' && ClassTimer.onExitWhiteboardView) {
+          ClassTimer.onExitWhiteboardView();
         }
       }
     });
+
+    const syncWeekBtn = document.getElementById('btn-homework-sync-week');
+    if (syncWeekBtn) {
+      syncWeekBtn.addEventListener('click', () => {
+        const linked = state.getLinkedClasses(this.selectedClassId);
+        const currentClass = state.classes.find(c => c.id === this.selectedClassId);
+        const currentClassName = currentClass ? currentClass.name : 'this class';
+
+        if (linked.length === 0) {
+          alert(`No linked classes configured for ${currentClassName}. Click "🔗 Manage Class Links" in View 3 to link parallel classes.`);
+          return;
+        }
+
+        const entries = this.getScheduledLessonsForSelectedWeek();
+        if (entries.length === 0) {
+          alert(`No scheduled lessons in ${currentClassName} for the selected week.`);
+          return;
+        }
+
+        const linkedNames = linked.map(l => l.name).join(', ');
+        if (confirm(`🔄 Sync all ${entries.length} scheduled lesson(s) for this week from ${currentClassName} to ${linkedNames}?`)) {
+          entries.forEach(entry => {
+            if (entry.lesson.isMerged && Array.isArray(entry.lesson.mergedLessonIds)) {
+              const rawLessons = state.lessonPlans[this.selectedClassId] || [];
+              entry.lesson.mergedLessonIds.forEach(mId => {
+                const subL = rawLessons.find(l => l.id === mId);
+                if (subL) {
+                  linked.forEach(targetClass => state.syncLinkedLesson(this.selectedClassId, subL, targetClass.id));
+                }
+              });
+            } else {
+              linked.forEach(targetClass => {
+                state.syncLinkedLesson(this.selectedClassId, entry.lesson, targetClass.id);
+              });
+            }
+          });
+          showToastNotification(`✅ Synced Week homework to ${linkedNames}!`);
+          this.renderMainContent();
+        }
+      });
+    }
 
     const termSelect = document.getElementById('homework-term-select');
     if (termSelect) {
@@ -1422,16 +1566,6 @@ export const HomeworkUI = {
       });
     }
 
-    document.addEventListener('click', (e) => {
-      const exitBtn = e.target.closest('#btn-exit-whiteboard') || e.target.closest('#modal-whiteboard-backdrop .modal-close');
-      const backdrop = document.getElementById('modal-whiteboard-backdrop');
-      if (exitBtn || (e.target === backdrop && backdrop && backdrop.classList.contains('active'))) {
-        if (typeof ClassTimer !== 'undefined' && ClassTimer.onExitWhiteboardView) {
-          ClassTimer.onExitWhiteboardView();
-        }
-      }
-    });
-
     const fsBtn = document.getElementById('btn-fullscreen-whiteboard');
     if (fsBtn) {
       fsBtn.addEventListener('click', () => {
@@ -1445,39 +1579,9 @@ export const HomeworkUI = {
         }
       });
     }
-
-    // Whiteboard hide tile & restore buttons handler
-    document.addEventListener('click', (e) => {
-      const hideBtn = e.target.closest('.wb-tile-hide-btn');
-      if (hideBtn) {
-        e.stopPropagation();
-        const lessonId = hideBtn.getAttribute('data-lesson-id');
-        if (lessonId) {
-          this.hiddenLessonIds = this.hiddenLessonIds || new Set();
-          this.hiddenLessonIds.add(lessonId);
-          this.renderWhiteboardContent();
-        }
-      }
-
-      const unhideBtn = e.target.closest('#btn-wb-unhide-all, .btn-wb-unhide-all');
-      if (unhideBtn) {
-        e.stopPropagation();
-        if (this.hiddenLessonIds) this.hiddenLessonIds.clear();
-        this.renderWhiteboardContent();
-      }
-    });
-
-    document.addEventListener('click', (e) => {
-      const limitBtn = e.target.closest('.wb-progress-btn');
-      if (limitBtn) {
-        const limitVal = limitBtn.getAttribute('data-limit');
-        this.coveredLessonLimit = (limitVal === 'all') ? null : parseInt(limitVal, 10);
-        if (limitVal === 'all' && this.hiddenLessonIds) {
-          this.hiddenLessonIds.clear();
-        }
-        this.renderWhiteboardContent();
-      }
-    });
-
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.HomeworkUI = HomeworkUI;
+}

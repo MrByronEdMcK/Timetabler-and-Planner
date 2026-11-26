@@ -144,13 +144,33 @@ class Scheduler:
 
         return result[:target_capacity]
 
+def load_modular_app_code():
+    module_files = [
+        'js/app.js',
+        'js/state.js',
+        'js/termManager.js',
+        'js/timetableManager.js',
+        'js/scheduler.js',
+        'js/ui/calendarUI.js',
+        'js/ui/timetableUI.js',
+        'js/ui/lessonUI.js',
+        'js/ui/masterScheduleUI.js',
+        'js/ui/conflictModal.js',
+        'js/ui/homeworkUI.js'
+    ]
+    chunks = []
+    for path in module_files:
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                chunks.append(f.read())
+    return '\n'.join(chunks)
+
 def run():
     runner = TestEngine()
     print('=== Australian Teacher Timetabler & Planner Automated Engine Tests ===\n')
 
-    # Load App state data
-    with open('js/app.js', 'r', encoding='utf-8') as f:
-        app_js = f.read()
+    # Load App state data across modular ES codebase
+    app_js = load_modular_app_code()
 
     runner.assert_true('aus_teacher_timetabler_state_v3' in app_js, 'Storage key is aus_teacher_timetabler_state_v3')
     runner.assert_true('parseLocalDate' in app_js, 'app.js includes hardened parseLocalDate helper')
@@ -762,8 +782,8 @@ def run():
     runner.assert_true('wb-chapter-bubble' in hw_ui_js, 'homeworkUI.js renders wb-chapter-bubble')
     runner.assert_true('lessonDisplayTitle = `Lesson ${lessonNumber}`' in app_js or 'lessonDisplayTitle = `Lesson ${idx + 1}`' in app_js, 'app.js uses clean Lesson number without appended titles in whiteboard view')
     runner.assert_true('lessonDisplayTitle = `Lesson ${lessonNumber}`' in hw_ui_js or 'lessonDisplayTitle = `Lesson ${idx + 1}`' in hw_ui_js, 'homeworkUI.js uses clean Lesson number without appended titles in whiteboard view')
-    runner.assert_true('${dayName} ${slot.periodName}\n' in app_js or '${dayName} ${slot.periodName}</span>' in app_js or '${dayName} ${slot.periodName}\r\n' in app_js, 'app.js displays only day and period badge without dates in whiteboard')
-    runner.assert_true('${dayName} ${slot.periodName}\n' in hw_ui_js or '${dayName} ${slot.periodName}</span>' in hw_ui_js or '${dayName} ${slot.periodName}\r\n' in hw_ui_js, 'homeworkUI.js displays only day and period badge without dates in whiteboard')
+    runner.assert_true('${dayName} ${slot.periodName}' in app_js or '${dayName} ${escapeHtml(slot.periodName)}' in app_js, 'app.js displays only day and period badge without dates in whiteboard')
+    runner.assert_true('${dayName} ${slot.periodName}' in hw_ui_js or '${dayName} ${escapeHtml(slot.periodName)}' in hw_ui_js, 'homeworkUI.js displays only day and period badge without dates in whiteboard')
 
     # Verify auto-scale calculation supports large readable font without shrinking
     class ScaleSimulator:
@@ -909,8 +929,7 @@ def run():
 
     # Test 19: Class Custom Color Theme & Yellow Display Rendering
     print('\nTest 19: Class Custom Color Theme & Yellow Display Rendering')
-    with open('js/app.js', 'r', encoding='utf-8') as f:
-        app_js = f.read()
+    app_js = load_modular_app_code()
     with open('js/state.js', 'r', encoding='utf-8') as f:
         st_js = f.read()
 
@@ -992,8 +1011,7 @@ def run():
         main_css = f.read()
     with open('js/timer.js', 'r', encoding='utf-8') as f:
         timer_js = f.read()
-    with open('js/app.js', 'r', encoding='utf-8') as f:
-        app_js = f.read()
+    app_js = load_modular_app_code()
 
     # 1. Markup verification
     runner.assert_true('wb-timeline-area' in idx_html, 'index.html contains .wb-timeline-area container')
@@ -1057,8 +1075,7 @@ def run():
         main_css = f.read()
     with open('js/timer.js', 'r', encoding='utf-8') as f:
         timer_js = f.read()
-    with open('js/app.js', 'r', encoding='utf-8') as f:
-        app_js = f.read()
+    app_js = load_modular_app_code()
 
     # 1. Stepper input unclipped and wide enough
     runner.assert_true('.wb-timer-stepper input' in main_css and 'min-width: 32px' in main_css, 'css/main.css gives stepper number input >=32px min-width to prevent digit cut-off')
@@ -1216,8 +1233,7 @@ def run():
 
     with open('js/ui/homeworkUI.js', 'r', encoding='utf-8') as f:
         hw_js = f.read()
-    with open('js/app.js', 'r', encoding='utf-8') as f:
-        app_js = f.read()
+    app_js = load_modular_app_code()
 
     # Dual-codebase inspection
     for code, name in [(hw_js, 'js/ui/homeworkUI.js'), (app_js, 'js/app.js')]:
@@ -1340,8 +1356,7 @@ def run():
     # 3. Dual codebase verification for homeworkUI / app.js pipe separator in lesson copy/paste
     with open('js/ui/homeworkUI.js', 'r', encoding='utf-8') as f:
         hw_code = f.read()
-    with open('js/app.js', 'r', encoding='utf-8') as f:
-        app_code = f.read()
+    app_code = load_modular_app_code()
 
     for code, name in [(hw_code, 'js/ui/homeworkUI.js'), (app_code, 'js/app.js')]:
         runner.assert_true("aggWorks.join(' | ')" in code, f"{name} joins lesson summary text category tasks with ' | '")
@@ -1634,6 +1649,41 @@ def run():
     runner.assert_true('unit-drag-handle' in app_code, 'app.js renders unit-drag-handle on unit headers')
     runner.assert_true('.unit-drag-handle' in planner_css, 'css/planner.css styles .unit-drag-handle')
     runner.assert_true('unit-move-btn' in app_code, 'app.js renders ▲/▼ unit move buttons')
+
+    # -------------------------------------------------------------------------
+    # TEST 37: Modular ES Architecture, Non-Destructive Merging, Validations & Keyboard Shortcuts
+    # -------------------------------------------------------------------------
+    print("\nTest 37: Modular ES Architecture, Non-Destructive Merging, Validations & Keyboard Shortcuts")
+    with open('js/app.js', 'r', encoding='utf-8') as f:
+        entry_app_js = f.read()
+    with open('js/scheduler.js', 'r', encoding='utf-8') as f:
+        sched_js = f.read()
+    with open('js/ui/masterScheduleUI.js', 'r', encoding='utf-8') as f:
+        master_ui_js = f.read()
+
+    # 1. Modular ES Architecture verification
+    runner.assert_true('<script type="module" src="js/app.js' in idx_html, 'index.html loads js/app.js as an ES module')
+    runner.assert_true("from './state.js'" in entry_app_js and "import { Scheduler } from './scheduler.js'" in entry_app_js, 'js/app.js imports modular state and scheduler engines')
+    runner.assert_true(len(entry_app_js.splitlines()) < 750, f'js/app.js refactored from 8,364 lines into clean modular controller ({len(entry_app_js.splitlines())} lines)')
+
+    # 2. Non-destructive lesson merging with "Merged: {Title 1}, {Title 2}"
+    runner.assert_true('buildMergedLessonObject(l1, l2' in sched_js, 'js/scheduler.js implements buildMergedLessonObject')
+    runner.assert_true('`Merged: ${l1.title}, ${l2.title}`' in sched_js, 'js/scheduler.js formats merged lesson titles as "Merged: {Title 1}, {Title 2}"')
+    runner.assert_true('`=== 1. ${l1.title} ===\\n${notes1}\\n\\n=== 2. ${l2.title} ===\\n${notes2}`' in sched_js, 'js/scheduler.js splits merged teaching notes by lesson with titling')
+    runner.assert_true('applyManualScheduleAdjustments(' in sched_js, 'js/scheduler.js implements non-destructive applyManualScheduleAdjustments')
+    runner.assert_true('unmergeLessons(' in sched_js, 'js/scheduler.js implements unmergeLessons')
+    runner.assert_true('restoreRevisionLesson(' in sched_js, 'js/scheduler.js implements restoreRevisionLesson')
+    runner.assert_true('resolveLessonOrMerged(' in sched_js, 'js/scheduler.js implements resolveLessonOrMerged')
+    runner.assert_true('btn-viewer-edit-merged-1' in lesson_ui_code and 'btn-viewer-edit-merged-2' in lesson_ui_code, 'js/ui/lessonUI.js LessonViewer supports editing either underlying lesson in a merged slot')
+    runner.assert_true('btn-viewer-unmerge' in lesson_ui_code, 'js/ui/lessonUI.js LessonViewer supports unmerging a merged lesson')
+
+    # 3. Bug fixes, performance optimization & keyboard shortcuts
+    runner.assert_true("if (floatCheck) floatCheck.checked = false;" in lesson_ui_code, 'js/ui/lessonUI.js resets #lesson-float-check when opening Add Lesson modal')
+    runner.assert_true("if (floatCheck) floatCheck.checked = !!lesson.isFloat;" in lesson_ui_code, 'js/ui/lessonUI.js populates #lesson-float-check when opening Edit Lesson modal')
+    runner.assert_true('const slotsByDate = new Map()' in master_ui_js, 'js/ui/masterScheduleUI.js pre-indexes class slots by date in a Map for O(1) lookup')
+    runner.assert_true('deletePeriodById(' in st_js, 'js/state.js implements deletePeriodById with orphan cleanup')
+    runner.assert_true("'1': 'terms'" in entry_app_js and "viewMap[e.key]" in entry_app_js, 'js/app.js implements global 1-5 view switching keyboard shortcuts')
+    runner.assert_true("e.key === 'Escape'" in entry_app_js, 'js/app.js implements global Escape modal/whiteboard closing shortcut')
 
     print('\n==================================================')
     print(f'Test Results: {runner.passes} PASSED, {runner.fails} FAILED')

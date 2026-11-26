@@ -1,9 +1,32 @@
 /* ==========================================================================
-   Timetable Manager (X-Week Cycle Rotation)
+   Timetable Manager (X-Week Cycle Rotation & Time Formatting)
    ========================================================================== */
 
 import { state } from './state.js';
 import { TermManager } from './termManager.js';
+
+export function formatSingleTime(timeStr) {
+  if (!timeStr) return '';
+  if (state.timeFormat === '24h') return timeStr;
+  const [hStr, mStr] = timeStr.split(':');
+  let h = parseInt(hStr, 10);
+  if (isNaN(h)) return timeStr;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${mStr || '00'} ${ampm}`;
+}
+
+export function formatTimeRange(startStr, endStr) {
+  if (!startStr && !endStr) return '';
+  return `${formatSingleTime(startStr)} - ${formatSingleTime(endStr)}`;
+}
+
+export function getWeekLetter(weekNum) {
+  const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  const idx = Math.max(0, (weekNum - 1)) % letters.length;
+  return `Week ${letters[idx]}`;
+}
 
 export const TimetableManager = {
   /**
@@ -16,7 +39,6 @@ export const TimetableManager = {
     const targetDate = TermManager.parseLocalDate(dateStr);
     if (!termStart || !targetDate) return 1;
 
-    // Calculate difference in weeks from the start of the term
     const diffTime = Math.abs(targetDate - termStart);
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     const weekIndex = Math.floor(diffDays / 7);
@@ -40,7 +62,7 @@ export const TimetableManager = {
     const slotVal = state.timetableSlots[key];
     if (!slotVal) return null;
 
-    let classId = typeof slotVal === 'string' ? slotVal : slotVal.classId;
+    const classId = typeof slotVal === 'string' ? slotVal : slotVal.classId;
     const classObj = state.classes.find(c => c.id === classId);
     if (!classObj) return null;
 
@@ -78,3 +100,10 @@ export const TimetableManager = {
     state.saveState();
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.TimetableManager = TimetableManager;
+  window.formatSingleTime = formatSingleTime;
+  window.formatTimeRange = formatTimeRange;
+  window.getWeekLetter = getWeekLetter;
+}

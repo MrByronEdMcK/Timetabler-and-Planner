@@ -1,22 +1,18 @@
 /* ==========================================================================
-   Master Schedule View & Conflict Monitor UI
+   Master Schedule View & Conflict Monitor UI (View 4)
    ========================================================================== */
 
-import { state } from '../state.js';
+import { state, getClassCellStyles, escapeHtml } from '../state.js';
 import { Scheduler } from '../scheduler.js';
 import { TermManager } from '../termManager.js';
 import { ConflictModal } from './conflictModal.js';
 
-function getReadableClassTextColor(colorHex) {
-  if (!colorHex || !colorHex.startsWith('#')) return 'var(--primary-light)';
-  const r = parseInt(colorHex.slice(1, 3), 16) || 0;
-  const g = parseInt(colorHex.slice(3, 5), 16) || 0;
-  const b = parseInt(colorHex.slice(5, 7), 16) || 0;
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  if (state.theme === 'light') {
-    return luminance > 0.65 ? '#1e293b' : colorHex;
+function triggerRefresh(force = false, isScheduleEdit = true) {
+  if (typeof window !== 'undefined' && typeof window.refreshAllViews === 'function') {
+    window.refreshAllViews(force, isScheduleEdit);
+  } else if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('planner:stateChanged'));
   }
-  return luminance < 0.4 ? '#ffffff' : colorHex;
 }
 
 export const MasterScheduleUI = {
@@ -116,7 +112,7 @@ export const MasterScheduleUI = {
       return this._cachedTermWeeks;
     }
 
-    const sortedTerms = [...state.terms].sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+    const sortedTerms = [...state.terms].sort((a, b) => String(a.startDate || '').localeCompare(String(b.startDate || '')));
     const list = [];
     sortedTerms.forEach(term => {
       const numWeeks = TermManager.getTermWeeks(term);
@@ -140,7 +136,8 @@ export const MasterScheduleUI = {
       const match = allList.find(item => {
         const term = item.term;
         const weekNum = item.weekNum;
-        const weekStart = new Date(term.startDate);
+        const weekStart = TermManager.parseLocalDate(term.startDate);
+        if (!weekStart) return false;
         weekStart.setDate(weekStart.getDate() + (weekNum - 1) * 7);
         const dayOfWeek = weekStart.getDay();
         const diffToMon = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
@@ -149,8 +146,8 @@ export const MasterScheduleUI = {
         const fri = new Date(mon);
         fri.setDate(fri.getDate() + 4);
 
-        const monStr = mon.toISOString().split('T')[0];
-        const friStr = fri.toISOString().split('T')[0];
+        const monStr = TermManager.formatLocalDate(mon);
+        const friStr = TermManager.formatLocalDate(fri);
         return currentD >= monStr && currentD <= friStr;
       });
 
@@ -158,11 +155,14 @@ export const MasterScheduleUI = {
 
       const termMatch = state.terms.find(t => currentD >= t.startDate && currentD <= t.endDate);
       if (termMatch) {
-        const d1 = new Date(termMatch.startDate);
-        const d2 = new Date(currentD);
-        const termWeeks = TermManager.getTermWeeks(termMatch);
-        const diffWeeks = Math.max(1, Math.min(termWeeks, Math.floor((d2 - d1) / (7 * 24 * 3600 * 1000)) + 1));
-        return [{ term: termMatch, weekNum: diffWeeks }];
+        const d1 = TermManager.parseLocalDate(termMatch.startDate);
+        const d2 = TermManager.parseLocalDate(currentD);
+        if (d1 && d2) {
+          const diffDays = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+          const termWeeks = TermManager.getTermWeeks(termMatch);
+          const diffWeeks = Math.max(1, Math.min(termWeeks, Math.floor(diffDays / 7) + 1));
+          return [{ term: termMatch, weekNum: diffWeeks }];
+        }
       }
 
       return [allList[0]];
@@ -192,10 +192,11 @@ export const MasterScheduleUI = {
     let classPillsHtml = `<button class="pill-btn ${this.selectedClassIds.includes('ALL') ? 'active' : ''}" data-type="class" data-id="ALL">All Classes</button>`;
     state.classes.forEach(c => {
       const active = this.selectedClassIds.includes(c.id) ? 'active' : '';
-      classPillsHtml += `<button class="pill-btn ${active}" data-type="class" data-id="${c.id}"><span style="color:${c.color}">●</span> ${c.name}</button>`;
+      const cellStyle = getClassCellStyles(c.color, state.theme === 'dark');
+      classPillsHtml += `<button class="pill-btn ${active}" data-type="class" data-id="${escapeHtml(c.id)}"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder}; margin-right:4px; vertical-align:middle;"></span>${escapeHtml(c.name)}</button>`;
     });
 
-    const termOptions = state.terms.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    const termOptions = state.terms.map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`).join('');
     const activeRange = this.getActiveTermWeeksInRange();
 
     const isCurrentWeekMode = this.rangeMode === 'CURRENT_WEEK';
@@ -208,7 +209,6 @@ export const MasterScheduleUI = {
             <div class="pills-group">${classPillsHtml}</div>
           </div>
 
-          <!-- View Mode Slider Switch (Show Current Week vs Date Range) -->
           <div class="master-mode-switch-wrapper" style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem 0.6rem; border-radius:30px; border:1px solid var(--border-color);">
             <button type="button" class="btn btn-xs ${isCurrentWeekMode ? 'btn-primary' : 'btn-secondary'}" id="btn-master-mode-week" style="border-radius:20px; font-size:0.75rem; font-weight:700;">Current Week</button>
             <button type="button" class="btn btn-xs ${!isCurrentWeekMode ? 'btn-primary' : 'btn-secondary'}" id="btn-master-mode-range" style="border-radius:20px; font-size:0.75rem; font-weight:700;">Date Range</button>
@@ -216,7 +216,7 @@ export const MasterScheduleUI = {
         </div>
 
         <div class="nav-row master-range-bar" style="padding:0.6rem 0.85rem; border-radius:var(--radius-md); border:1px solid var(--border-color); display:flex; align-items:center; gap:1rem; flex-wrap:wrap; opacity:${isCurrentWeekMode ? 0.6 : 1};">
-          <span style="font-weight:700; font-size:0.85rem; color:var(--primary-light);">Term & Week Range:</span>
+          <span style="font-weight:700; font-size:0.85rem; color:var(--primary);">Term & Week Range:</span>
           
           <div style="display:flex; align-items:center; gap:0.4rem;">
             <span style="font-size:0.8rem; color:var(--text-muted); font-weight:600;">From:</span>
@@ -372,12 +372,12 @@ export const MasterScheduleUI = {
           <div>
             <strong>Pacing Conflict Detected!</strong><br>
             <span style="font-size:0.85rem; opacity:0.9;">
-              Before "${targetTitle}" (${dateText}): You have <strong>${primaryConflict.availableSlots} available slots</strong> but need <strong>${primaryConflict.requiredLessons} lessons</strong> (${primaryConflict.deficit} missing slot/s).
+              Before "${escapeHtml(targetTitle)}" (${escapeHtml(dateText)}): You have <strong>${primaryConflict.availableSlots} available slots</strong> but need <strong>${primaryConflict.requiredLessons} lessons</strong> (${primaryConflict.deficit} missing slot/s).
             </span>
           </div>
         </div>
         <div class="conflict-actions">
-          <button class="btn btn-warning btn-sm btn-resolve-conflict" data-class="${singleClassId}">
+          <button class="btn btn-warning btn-sm btn-resolve-conflict" data-class="${escapeHtml(singleClassId)}">
             ⚡ Resolve Conflict
           </button>
         </div>
@@ -400,19 +400,34 @@ export const MasterScheduleUI = {
       classScheduleMap[c.id] = Scheduler.generateScheduleForClass(c.id).schedule;
     });
 
+    // Optimization: Pre-index all relevant year slots by dateStr once instead of calling getAllClassSlotsForYear per day card
+    const slotsByDate = new Map();
+    const isAllClasses = this.selectedClassIds.includes('ALL');
+    const selectedSet = new Set(this.selectedClassIds);
+    const allYearSlots = Scheduler.getAllClassSlotsForYear('ALL');
+    allYearSlots.forEach(s => {
+      if (isAllClasses || (s.assignedClass && selectedSet.has(s.assignedClass.id))) {
+        if (!slotsByDate.has(s.date)) {
+          slotsByDate.set(s.date, []);
+        }
+        slotsByDate.get(s.date).push(s);
+      }
+    });
+
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     let gridHtml = '';
 
     activeRange.forEach(({ term, weekNum }) => {
-      const termStart = new Date(term.startDate);
+      const termStart = TermManager.parseLocalDate(term.startDate);
+      if (!termStart) return;
       const weekOffsetDays = (weekNum - 1) * 7;
       const weekStartDate = new Date(termStart);
       weekStartDate.setDate(weekStartDate.getDate() + weekOffsetDays);
 
       gridHtml += `
         <div style="margin-bottom: 1.25rem;">
-          <div style="font-weight: 800; font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--primary-light);">
-            📅 ${term.name} • Week ${weekNum}
+          <div style="font-weight: 800; font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--primary);">
+            📅 ${escapeHtml(term.name)} • Week ${weekNum}
           </div>
           <div class="master-calendar-grid">
       `;
@@ -423,18 +438,9 @@ export const MasterScheduleUI = {
         const diffToMon = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
         currentDate.setDate(currentDate.getDate() + diffToMon + idx);
 
-        const dateStr = currentDate.toISOString().split('T')[0];
+        const dateStr = TermManager.formatLocalDate(currentDate);
         const isPast = dateStr <= state.currentDate;
-
-        let daySlots = [];
-        if (this.selectedClassIds.includes('ALL')) {
-          daySlots = Scheduler.getAllClassSlotsForYear('ALL').filter(s => s.date === dateStr);
-        } else {
-          this.selectedClassIds.forEach(cId => {
-            const slots = Scheduler.getAllClassSlotsForYear(cId).filter(s => s.date === dateStr);
-            daySlots.push(...slots);
-          });
-        }
+        const daySlots = slotsByDate.get(dateStr) || [];
 
         let slotsHtml = '';
         if (daySlots.length === 0) {
@@ -442,7 +448,7 @@ export const MasterScheduleUI = {
           if (dayBlockout) {
             slotsHtml = `
               <div class="master-slot-item blockout">
-                <strong>🚫 ${dayBlockout.title}</strong>
+                <strong>🚫 ${escapeHtml(dayBlockout.title)}</strong>
                 <div style="font-size:0.72rem;">Whole Day Blocked Out</div>
               </div>
             `;
@@ -457,8 +463,8 @@ export const MasterScheduleUI = {
             if (blockout) {
               slotsHtml += `
                 <div class="master-slot-item blockout">
-                  <strong>🚫 ${blockout.title}</strong>
-                  <div style="font-size:0.72rem;">${s.periodName} (${s.timeFormatted}) • ${classObj.name}</div>
+                  <strong>🚫 ${escapeHtml(blockout.title)}</strong>
+                  <div style="font-size:0.72rem;">${escapeHtml(s.periodName)} (${escapeHtml(s.timeFormatted)}) • ${escapeHtml(classObj.name)}</div>
                 </div>
               `;
             } else {
@@ -473,20 +479,20 @@ export const MasterScheduleUI = {
                 if (lesson.isFloat) tags += `🎈 `;
                 if (lesson.isRevision) tags += `⭐ `;
                 if (lesson.isTestMilestone) tags += `🎯 `;
-                lessonTitle = `<div>${tags}<strong>${lesson.title}</strong></div>`;
+                lessonTitle = `<div>${tags}<strong>${escapeHtml(lesson.title)}</strong></div>`;
               }
 
               let slotBtnHtml = '';
               if (!isPast) {
                 const actionInfo = Scheduler.checkSlotActionType(classObj.id, s.date, s.periodId, classSchedule);
                 if (actionInfo.type === 'REMOVE_FLOAT') {
-                  slotBtnHtml = `<button type="button" class="btn btn-danger btn-xs btn-remove-slot-float" data-class="${classObj.id}" data-lesson-id="${actionInfo.lessonId}" style="white-space:nowrap; padding:0.15rem 0.4rem; font-size:0.7rem;" title="Remove this Float lesson">🗑️ Float</button>`;
+                  slotBtnHtml = `<button type="button" class="btn btn-danger btn-xs btn-remove-slot-float" data-class="${escapeHtml(classObj.id)}" data-lesson-id="${escapeHtml(actionInfo.lessonId)}" style="white-space:nowrap; padding:0.15rem 0.4rem; font-size:0.7rem;" title="Remove this Float lesson">🗑️ Float</button>`;
                 } else if (actionInfo.type === 'REVISION_SHIFT') {
-                  slotBtnHtml = `<button type="button" class="btn btn-warning btn-xs btn-shift-slot-revision" data-class="${classObj.id}" data-revision-id="${actionInfo.targetRevisionId}" data-date="${s.date}" data-period="${s.periodId}" style="white-space:nowrap; padding:0.15rem 0.4rem; font-size:0.7rem;" title="${actionInfo.message}">⭐ + Revision</button>`;
+                  slotBtnHtml = `<button type="button" class="btn btn-warning btn-xs btn-shift-slot-revision" data-class="${escapeHtml(classObj.id)}" data-revision-id="${escapeHtml(actionInfo.targetRevisionId)}" data-date="${escapeHtml(s.date)}" data-period="${escapeHtml(s.periodId)}" style="white-space:nowrap; padding:0.15rem 0.4rem; font-size:0.7rem;" title="${escapeHtml(actionInfo.message)}">⭐ + Revision</button>`;
                 } else if (actionInfo.type === 'FLOAT') {
-                  slotBtnHtml = `<button type="button" class="btn btn-secondary btn-xs btn-insert-slot-float" data-class="${classObj.id}" data-date="${s.date}" data-period="${s.periodId}" style="white-space:nowrap; padding:0.15rem 0.4rem; font-size:0.7rem;" title="Insert Float lesson">🎈 + Float</button>`;
+                  slotBtnHtml = `<button type="button" class="btn btn-secondary btn-xs btn-insert-slot-float" data-class="${escapeHtml(classObj.id)}" data-date="${escapeHtml(s.date)}" data-period="${escapeHtml(s.periodId)}" style="white-space:nowrap; padding:0.15rem 0.4rem; font-size:0.7rem;" title="Insert Float lesson">🎈 + Float</button>`;
                 } else if (actionInfo.type === 'MAX_CAPACITY') {
-                  slotBtnHtml = `<button type="button" disabled class="btn btn-secondary btn-xs" style="white-space:nowrap; opacity:0.4; cursor:not-allowed; border-color:transparent; padding:0.15rem 0.4rem; font-size:0.7rem;" title="${actionInfo.message}">🔒 Max</button>`;
+                  slotBtnHtml = `<button type="button" disabled class="btn btn-secondary btn-xs" style="white-space:nowrap; opacity:0.4; cursor:not-allowed; border-color:transparent; padding:0.15rem 0.4rem; font-size:0.7rem;" title="${escapeHtml(actionInfo.message)}">🔒 Max</button>`;
                 }
               }
 
@@ -494,30 +500,33 @@ export const MasterScheduleUI = {
               const isFloat = lesson && lesson.isFloat;
 
               const isLight = (state.theme === 'light');
-              const classTitleColor = isMerged ? (isLight ? '#6d28d9' : '#c4b5fd') : getReadableClassTextColor(classObj.color);
-              const slotBg = isMerged 
-                ? (isLight ? 'rgba(139, 92, 246, 0.12)' : 'rgba(139, 92, 246, 0.25)') 
-                : (isLight ? `${classObj.color}18` : `${classObj.color}25`);
-              const slotBorder = isMerged 
-                ? '1px solid rgba(139, 92, 246, 0.4)' 
-                : `1px solid ${classObj.color}${isLight ? '45' : '65'}`;
+              const cellStyle = getClassCellStyles(classObj.color, !isLight);
+              const classTitleColor = isMerged ? (isLight ? '#6d28d9' : '#c4b5fd') : cellStyle.textColor;
+              const slotBg = isMerged
+                ? (isLight ? 'rgba(139, 92, 246, 0.12)' : 'rgba(139, 92, 246, 0.25)')
+                : cellStyle.bg;
+              const slotBorder = isMerged
+                ? '1px solid rgba(139, 92, 246, 0.4)'
+                : cellStyle.cardBorder;
+              const barColor = isMerged ? '#8b5cf6' : cellStyle.accentBar;
 
               slotsHtml += `
                 <div class="master-slot-item ${isMerged ? 'is-merged' : ''} ${isFloat ? 'is-float' : ''}" 
                      draggable="${lesson ? 'true' : 'false'}" 
-                     style="background:${slotBg} !important; border:${slotBorder} !important; border-left:4px solid ${isMerged ? '#8b5cf6' : classObj.color} !important; cursor:${lesson ? 'grab' : 'default'}; padding:0.55rem; border-radius:var(--radius-sm); margin-bottom:0.4rem;"
-                     data-class-id="${classObj.id}" ${lesson ? `data-lesson-id="${lesson.id}"` : ''}
-                     data-date="${s.date}" data-period="${s.periodId}">
+                     style="background:${slotBg} !important; border:${slotBorder} !important; border-left:4px solid ${barColor} !important; cursor:${lesson ? 'grab' : 'pointer'}; padding:0.55rem; border-radius:var(--radius-sm); margin-bottom:0.4rem;"
+                     data-class-id="${escapeHtml(classObj.id)}" ${lesson ? `data-lesson-id="${escapeHtml(lesson.id)}"` : ''}
+                     data-date="${escapeHtml(s.date)}" data-period="${escapeHtml(s.periodId)}">
                   <div style="display:flex; justify-content:space-between; align-items:center; gap:0.35rem; margin-bottom:0.15rem;">
-                    <div style="font-size:0.8rem; color:${classTitleColor}; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                      <span style="color:${classObj.color}; font-size:0.9rem;">●</span> ${classObj.name}
+                    <div style="font-size:0.8rem; color:${classTitleColor}; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:4px;">
+                      <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder}; flex-shrink:0;"></span>
+                      <span>${escapeHtml(classObj.name)}</span>
                     </div>
                     <div style="white-space:nowrap; flex-shrink:0;">
                       ${slotBtnHtml}
                     </div>
                   </div>
                   <div style="font-size:0.73rem; color:var(--text-muted); font-weight:700; margin-bottom:0.25rem;">
-                    ${s.periodName}
+                    ${escapeHtml(s.periodName)}
                   </div>
                   <div style="color:var(--text-main); font-weight:600; font-size:0.82rem; line-height:1.25;">
                     ${lessonTitle}
@@ -545,9 +554,297 @@ export const MasterScheduleUI = {
     });
 
     container.innerHTML = gridHtml;
+    this.bindDragAndDropEvents();
+    this.bindFloatSlotEvents();
+  },
+
+  bindFloatSlotEvents() {
+    const container = document.getElementById('master-calendar-grid-container');
+    if (!container || container._hasFloatListener) return;
+    container._hasFloatListener = true;
+
+    container.addEventListener('click', (e) => {
+      const shiftRevisionBtn = e.target.closest('.btn-shift-slot-revision');
+      if (shiftRevisionBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const classId = shiftRevisionBtn.getAttribute('data-class');
+        const revId = shiftRevisionBtn.getAttribute('data-revision-id');
+        const date = shiftRevisionBtn.getAttribute('data-date');
+        const periodId = shiftRevisionBtn.getAttribute('data-period');
+
+        const lessons = state.lessonPlans[classId] || [];
+        const revIdx = lessons.findIndex(l => l.id === revId);
+        if (revIdx >= 0) {
+          const [revLesson] = lessons.splice(revIdx, 1);
+          const { schedule } = Scheduler.generateScheduleForClass(classId);
+          const targetSchedIdx = schedule.findIndex(s => s.slot.date === date && s.slot.periodId === periodId);
+
+          let insertIdx = 0;
+          if (targetSchedIdx >= 0) {
+            let prevLesson = null;
+            for (let i = targetSchedIdx - 1; i >= 0; i--) {
+              if (schedule[i].lesson && !schedule[i].lesson.isAutofilled) {
+                prevLesson = schedule[i].lesson;
+                break;
+              }
+            }
+            if (prevLesson) {
+              const prevId = Array.isArray(prevLesson.mergedLessonIds)
+                ? prevLesson.mergedLessonIds[prevLesson.mergedLessonIds.length - 1]
+                : prevLesson.id;
+              const prevIdx = lessons.findIndex(l => l.id === prevId);
+              if (prevIdx >= 0) insertIdx = prevIdx + 1;
+            }
+          }
+
+          lessons.splice(insertIdx, 0, revLesson);
+          state.saveState();
+
+          this.showReanalysisOverlay('Re-analyzing Schedule & Shifting Revision Class...');
+          setTimeout(() => {
+            this.hideReanalysisOverlay();
+            triggerRefresh(false, true);
+          }, 350);
+        }
+        return;
+      }
+
+      const addFloatBtn = e.target.closest('.btn-insert-slot-float');
+      if (addFloatBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const classId = addFloatBtn.getAttribute('data-class');
+        const date = addFloatBtn.getAttribute('data-date');
+        const periodId = addFloatBtn.getAttribute('data-period');
+
+        const lessons = state.lessonPlans[classId] || [];
+        const { schedule } = Scheduler.generateScheduleForClass(classId);
+        const targetSchedIdx = schedule.findIndex(s => s.slot.date === date && s.slot.periodId === periodId);
+
+        let insertIdx = 0;
+        if (targetSchedIdx >= 0) {
+          let prevLesson = null;
+          for (let i = targetSchedIdx - 1; i >= 0; i--) {
+            if (schedule[i].lesson && !schedule[i].lesson.isAutofilled) {
+              prevLesson = schedule[i].lesson;
+              break;
+            }
+          }
+          if (prevLesson) {
+            const prevId = Array.isArray(prevLesson.mergedLessonIds)
+              ? prevLesson.mergedLessonIds[prevLesson.mergedLessonIds.length - 1]
+              : prevLesson.id;
+            const prevIdx = lessons.findIndex(l => l.id === prevId);
+            if (prevIdx >= 0) insertIdx = prevIdx + 1;
+          }
+        }
+
+        const prevLesson = insertIdx > 0 ? lessons[insertIdx - 1] : null;
+        const nextLesson = insertIdx < lessons.length ? lessons[insertIdx] : null;
+
+        let targetUnit = 'General Curriculum';
+        if (prevLesson && prevLesson.unit) {
+          targetUnit = prevLesson.unit;
+        } else if (nextLesson && nextLesson.unit) {
+          targetUnit = nextLesson.unit;
+        }
+
+        const floatCount = lessons.filter(l => l.isFloat).length + 1;
+        const newFloat = {
+          id: `float_${Date.now()}`,
+          title: `🎈 Float / Free Lesson #${floatCount}`,
+          unit: targetUnit,
+          isFloat: true,
+          content: 'Unstructured float / catch-up lesson. Discarded FIRST during pacing conflicts.'
+        };
+
+        lessons.splice(insertIdx, 0, newFloat);
+        state.saveState();
+
+        this.showReanalysisOverlay('Re-analyzing Schedule & Inserting Float...');
+        setTimeout(() => {
+          this.hideReanalysisOverlay();
+          triggerRefresh(false, true);
+        }, 350);
+        return;
+      }
+
+      const removeFloatBtn = e.target.closest('.btn-remove-slot-float');
+      if (removeFloatBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const classId = removeFloatBtn.getAttribute('data-class');
+        const lessonId = removeFloatBtn.getAttribute('data-lesson-id');
+        if (classId && lessonId) {
+          state.lessonPlans[classId] = (state.lessonPlans[classId] || []).filter(l => l.id !== lessonId);
+          state.saveState();
+
+          this.showReanalysisOverlay('Re-analyzing Schedule...');
+          setTimeout(() => {
+            this.hideReanalysisOverlay();
+            triggerRefresh(false, true);
+          }, 350);
+        }
+        return;
+      }
+
+      // Single unified click handler for opening LessonViewer (regular or merged) or Add Lesson modal
+      const slotItem = e.target.closest('.master-slot-item');
+      if (slotItem && !slotItem.classList.contains('blockout') && !e.target.closest('button')) {
+        const classId = slotItem.getAttribute('data-class-id');
+        const lessonId = slotItem.getAttribute('data-lesson-id');
+        const dateStr = slotItem.getAttribute('data-date');
+        const periodId = slotItem.getAttribute('data-period');
+        const classObj = state.classes.find(c => c.id === classId);
+        const periodObj = state.periods.find(p => p.id === periodId);
+        const term = TermManager.getTermForDate(dateStr);
+
+        const slotInfo = {
+          date: dateStr,
+          termName: term ? term.name : '',
+          periodId: periodId,
+          periodName: periodObj ? periodObj.name : ''
+        };
+
+        if (lessonId) {
+          const lesson = Scheduler.resolveLessonOrMerged(classId, lessonId);
+          if (lesson && classObj && typeof window !== 'undefined' && window.LessonViewer) {
+            window.LessonViewer.open(lesson, classObj, slotInfo);
+          }
+        } else if (classId && typeof window !== 'undefined' && window.LessonUI) {
+          window.LessonUI.openAddLessonModal(classId, dateStr, periodId);
+        }
+      }
+    });
+  },
+
+  bindDragAndDropEvents() {
+    const container = document.getElementById('master-calendar-grid-container');
+    if (!container) return;
+
+    const items = container.querySelectorAll('.master-slot-item[draggable="true"]');
+    items.forEach(item => {
+      item.addEventListener('dragstart', (e) => {
+        const payload = {
+          classId: item.getAttribute('data-class-id'),
+          lessonId: item.getAttribute('data-lesson-id'),
+          date: item.getAttribute('data-date'),
+          periodId: item.getAttribute('data-period')
+        };
+        e.dataTransfer.setData('text/plain', JSON.stringify(payload));
+        item.style.opacity = '0.5';
+      });
+
+      item.addEventListener('dragend', () => {
+        item.style.opacity = '1';
+      });
+    });
+
+    const allSlotItems = container.querySelectorAll('.master-slot-item:not(.blockout)');
+    allSlotItems.forEach(slot => {
+      slot.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        slot.style.background = 'rgba(59, 130, 246, 0.25)';
+      });
+
+      slot.addEventListener('dragleave', () => {
+        slot.style.background = '';
+      });
+
+      slot.addEventListener('drop', (e) => {
+        e.preventDefault();
+        slot.style.background = '';
+
+        try {
+          const rawData = e.dataTransfer.getData('text/plain');
+          if (!rawData) return;
+          const data = JSON.parse(rawData);
+
+          const sourceClassId = data.classId;
+          let draggedLessonId = data.lessonId;
+
+          const targetClassId = slot.getAttribute('data-class-id');
+          const targetDate = slot.getAttribute('data-date');
+          const targetPeriodId = slot.getAttribute('data-period');
+          let targetLessonId = slot.getAttribute('data-lesson-id');
+
+          if (!draggedLessonId || sourceClassId !== targetClassId) return;
+
+          const lessons = state.lessonPlans[targetClassId] || [];
+
+          // If dragging a merged lesson in the calendar, unmerge it and move its first constituent lesson
+          if (String(draggedLessonId).startsWith('merged_')) {
+            const resolved = Scheduler.resolveLessonOrMerged(targetClassId, draggedLessonId);
+            if (resolved && Array.isArray(resolved.mergedLessonIds) && resolved.mergedLessonIds.length > 0) {
+              Scheduler.unmergeLessons(targetClassId, resolved.mergedLessonIds[0]);
+              draggedLessonId = resolved.mergedLessonIds[0];
+            }
+          }
+          if (targetLessonId && String(targetLessonId).startsWith('merged_')) {
+            const resolvedTarget = Scheduler.resolveLessonOrMerged(targetClassId, targetLessonId);
+            if (resolvedTarget && Array.isArray(resolvedTarget.mergedLessonIds) && resolvedTarget.mergedLessonIds.length > 0) {
+              targetLessonId = resolvedTarget.mergedLessonIds[0];
+            }
+          }
+
+          const srcIdx = lessons.findIndex(l => l.id === draggedLessonId);
+          if (srcIdx === -1) return;
+
+          const [draggedLesson] = lessons.splice(srcIdx, 1);
+          delete draggedLesson.mergeWithNextId;
+          let insertIdx = -1;
+
+          if (targetLessonId && targetLessonId !== draggedLessonId) {
+            insertIdx = lessons.findIndex(l => l.id === targetLessonId);
+          }
+
+          if (insertIdx === -1) {
+            const { schedule } = Scheduler.generateScheduleForClass(targetClassId);
+            const targetSchedIdx = schedule.findIndex(s => s.slot.date === targetDate && s.slot.periodId === targetPeriodId);
+
+            if (targetSchedIdx >= 0) {
+              let prevLesson = null;
+              for (let i = targetSchedIdx - 1; i >= 0; i--) {
+                if (schedule[i].lesson && schedule[i].lesson.id !== draggedLessonId && !schedule[i].lesson.isAutofilled) {
+                  prevLesson = schedule[i].lesson;
+                  break;
+                }
+              }
+              if (prevLesson) {
+                const prevId = Array.isArray(prevLesson.mergedLessonIds)
+                  ? prevLesson.mergedLessonIds[prevLesson.mergedLessonIds.length - 1]
+                  : prevLesson.id;
+                const prevIdx = lessons.findIndex(l => l.id === prevId);
+                if (prevIdx >= 0) insertIdx = prevIdx + 1;
+              }
+            }
+          }
+
+          if (insertIdx === -1 || insertIdx < 0) {
+            insertIdx = 0;
+          }
+
+          insertIdx = Math.min(insertIdx, lessons.length);
+          lessons.splice(insertIdx, 0, draggedLesson);
+
+          if (typeof window !== 'undefined' && window.LessonUI && typeof window.LessonUI.validateAndClearInvalidAnchorsAfterReorder === 'function') {
+            window.LessonUI.validateAndClearInvalidAnchorsAfterReorder(targetClassId, new Set([draggedLesson.id]));
+          }
+
+          state.saveState();
+          triggerRefresh(false, true);
+        } catch (err) {
+          console.error('[Calendar DragDrop Critical Error]', err);
+        }
+      });
+    });
   },
 
   bindEvents() {
+    if (this._eventsBound) return;
+    this._eventsBound = true;
+
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.pill-btn');
       if (btn) {
@@ -569,3 +866,7 @@ export const MasterScheduleUI = {
     });
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.MasterScheduleUI = MasterScheduleUI;
+}

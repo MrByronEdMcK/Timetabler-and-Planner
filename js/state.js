@@ -1,11 +1,21 @@
 /* ==========================================================================
-   State Management & Default Data Store (v3)
+   State Management, Default Data Store (v3), Color Science & Toast Utilities
    ========================================================================== */
 
-const STORAGE_KEY = 'aus_teacher_timetabler_state_v3';
+export const STORAGE_KEY = 'aus_teacher_timetabler_state_v3';
+
+export function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // Helper to calculate exact school weeks between start and end dates (Mon-Fri)
-function calculateTermWeeks(startDateStr, endDateStr) {
+export function calculateTermWeeks(startDateStr, endDateStr) {
   if (!startDateStr || !endDateStr) return 10;
   let start = null, end = null;
   const p1 = String(startDateStr).split('-').map(Number);
@@ -25,7 +35,7 @@ function calculateTermWeeks(startDateStr, endDateStr) {
 }
 
 // Default Australian School Terms (2026 Sample Default - Configurable)
-const DEFAULT_TERMS = [
+export const DEFAULT_TERMS = [
   { id: 't1', name: 'Term 1', startDate: '2026-01-28', endDate: '2026-04-02', weeks: 10 },
   { id: 't2', name: 'Term 2', startDate: '2026-04-20', endDate: '2026-07-03', weeks: 11 },
   { id: 't3', name: 'Term 3', startDate: '2026-07-13', endDate: '2026-09-18', weeks: 10 },
@@ -33,7 +43,7 @@ const DEFAULT_TERMS = [
 ];
 
 // Default Configurable Periods with Native Start & End Times (Req 2)
-const DEFAULT_PERIODS = [
+export const DEFAULT_PERIODS = [
   { id: 'p1', name: 'Period 1', startTime: '09:00', endTime: '10:00' },
   { id: 'p2', name: 'Period 2', startTime: '10:00', endTime: '11:00' },
   { id: 'recess', name: 'Recess', startTime: '11:00', endTime: '11:30', isBreak: true },
@@ -43,21 +53,21 @@ const DEFAULT_PERIODS = [
   { id: 'p5', name: 'Period 5', startTime: '14:15', endTime: '15:15' }
 ];
 
-const PALETTE = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1', '#f97316'];
-const DEFAULT_CLASSES = [
+export const PALETTE = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1', '#f97316'];
+export const DEFAULT_CLASSES = [
   { id: 'c1', name: 'Year 9 Mathematics', subject: 'Mathematics', color: '#3b82f6', details: 'Room 201' },
   { id: 'c2', name: 'Year 10 Science', subject: 'Science', color: '#10b981', details: 'Lab B' },
   { id: 'c3', name: 'Year 11 Physics', subject: 'Physics', color: '#8b5cf6', details: 'Lab A' }
 ];
 
-const DEFAULT_EVENTS = [
+export const DEFAULT_EVENTS = [
   { id: 'e1', title: 'Swimming Carnival', date: '2026-02-13', type: 'carnival', blockAllDay: true },
   { id: 'e2', title: 'ANZAC Day Holiday', date: '2026-04-27', type: 'holiday', blockAllDay: true },
   { id: 'e3', title: 'Athletics Carnival', date: '2026-08-07', type: 'carnival', blockAllDay: true },
   { id: 'e4', title: 'Term 3 Assembly', date: '2026-08-14', type: 'assembly', blockAllDay: false, blockedPeriod: 'p1' }
 ];
 
-const DEFAULT_TIMETABLE_SLOTS = {
+export const DEFAULT_TIMETABLE_SLOTS = {
   '1_1_p1': 'c1', '1_1_p3': 'c2', '1_2_p2': 'c1', '1_2_p4': 'c3',
   '1_3_p1': 'c2', '1_3_p5': 'c1', '1_4_p2': 'c2', '1_4_p3': 'c3',
   '1_5_p1': 'c1', '1_5_p4': 'c2',
@@ -65,7 +75,7 @@ const DEFAULT_TIMETABLE_SLOTS = {
   '2_3_p2': 'c3', '2_3_p4': 'c1', '2_4_p1': 'c1', '2_4_p5': 'c2'
 };
 
-const DEFAULT_LESSON_PLANS = {
+export const DEFAULT_LESSON_PLANS = {
   'c1': [
     {
       id: 'l101',
@@ -235,7 +245,7 @@ export const PersistentStorageManager = {
   }
 };
 
-function sortEventsChronologically(events) {
+export function sortEventsChronologically(events) {
   if (!Array.isArray(events)) return events;
   events.sort((a, b) => {
     const sA = String(a?.startDate || a?.date || '');
@@ -249,7 +259,7 @@ function sortEventsChronologically(events) {
   return events;
 }
 
-function sanitizeLessonPlans(lessonPlans) {
+export function sanitizeLessonPlans(lessonPlans) {
   let cleaned = false;
   if (!lessonPlans || typeof lessonPlans !== 'object') return false;
   Object.keys(lessonPlans).forEach(classId => {
@@ -270,6 +280,210 @@ function sanitizeLessonPlans(lessonPlans) {
     }
   });
   return cleaned;
+}
+
+// Toast Notification Utilities
+export function showToastNotification(msg) {
+  if (!msg || typeof document === 'undefined') return;
+  let toast = document.getElementById('simple-toast-notification');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'simple-toast-notification';
+    toast.style.cssText = 'position:fixed; bottom:25px; right:25px; background:var(--primary); color:#ffffff; border-radius:var(--radius-md); padding:0.6rem 1.1rem; box-shadow:0 10px 25px rgba(0,0,0,0.25); z-index:2050; font-size:0.85rem; font-weight:700; transition:all 0.3s ease; transform:translateY(10px); opacity:0;';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  setTimeout(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+  }, 10);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    setTimeout(() => { toast.style.display = 'none'; }, 300);
+  }, 3000);
+}
+
+export function showReanalysisSummaryToast(summaryMsg) {
+  if (!summaryMsg || typeof document === 'undefined') return;
+  let toast = document.getElementById('reanalysis-summary-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'reanalysis-summary-toast';
+    toast.style.cssText = 'position:fixed; top:80px; right:25px; background:var(--bg-surface); color:var(--text-main); border:1px solid var(--primary); border-radius:var(--radius-md); padding:0.85rem 1.25rem; box-shadow:var(--shadow-xl); z-index:2050; font-size:0.85rem; font-weight:700; display:flex; align-items:center; gap:0.75rem; transition:all 0.3s ease; transform:translateY(-10px); opacity:0;';
+    document.body.appendChild(toast);
+  }
+  toast.style.background = 'var(--bg-surface)';
+  toast.style.color = 'var(--text-main)';
+  toast.style.borderColor = 'var(--border-color)';
+  toast.innerHTML = `
+    <span style="font-size:1.3rem;">⚡</span>
+    <div>
+      <div style="font-weight:800; font-size:0.88rem; color:var(--primary);">Pacing Reanalysis Impact</div>
+      <div style="font-weight:600; font-size:0.8rem; margin-top:0.15rem;">${summaryMsg}</div>
+    </div>
+    <button type="button" style="background:none; border:none; color:inherit; font-size:1.1rem; cursor:pointer; margin-left:0.5rem;" onclick="this.parentElement.style.opacity='0';">&times;</button>
+  `;
+  toast.style.display = 'flex';
+  setTimeout(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+  }, 10);
+
+  setTimeout(() => {
+    if (toast) {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(-10px)';
+      setTimeout(() => { toast.style.display = 'none'; }, 300);
+    }
+  }, 6500);
+}
+
+// Color Science & Cell Styling Utilities
+export function getColorYIQ(hexColor) {
+  if (!hexColor || typeof hexColor !== 'string') return 128;
+  let hex = hexColor.replace('#', '').trim();
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  if (hex.length < 6) return 128;
+  const r = parseInt(hex.substring(0, 2), 16) || 0;
+  const g = parseInt(hex.substring(2, 4), 16) || 0;
+  const b = parseInt(hex.substring(4, 6), 16) || 0;
+  return (r * 299 + g * 587 + b * 114) / 1000;
+}
+
+export function isColorNearWhite(hexColor) {
+  if (!hexColor || typeof hexColor !== 'string') return false;
+  let hex = hexColor.replace('#', '').trim();
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  if (hex.length < 6) return false;
+  const r = parseInt(hex.substring(0, 2), 16) || 0;
+  const g = parseInt(hex.substring(2, 4), 16) || 0;
+  const b = parseInt(hex.substring(4, 6), 16) || 0;
+  const min = Math.min(r, g, b);
+  const max = Math.max(r, g, b);
+  const sat = max === 0 ? 0 : (max - min) / max;
+  return min >= 235 && sat <= 0.08;
+}
+
+export function isColorNearBlack(hexColor) {
+  if (!hexColor || typeof hexColor !== 'string') return false;
+  let hex = hexColor.replace('#', '').trim();
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  if (hex.length < 6) return false;
+  const r = parseInt(hex.substring(0, 2), 16) || 0;
+  const g = parseInt(hex.substring(2, 4), 16) || 0;
+  const b = parseInt(hex.substring(4, 6), 16) || 0;
+  const max = Math.max(r, g, b);
+  return max <= 45;
+}
+
+export function getClassCellStyles(hexColor, isDark) {
+  const safeColor = hexColor || (isDark ? '#38bdf8' : '#2563eb');
+  const yiq = getColorYIQ(safeColor);
+  const nearWhite = isColorNearWhite(safeColor);
+  const nearBlack = isColorNearBlack(safeColor);
+
+  if (isDark) {
+    if (nearBlack) {
+      return {
+        bg: 'rgba(0, 0, 0, 0.65)',
+        border: '2px solid #94a3b8',
+        cardBorder: '1px solid #94a3b8',
+        accentBar: '#94a3b8',
+        textColor: '#f8fafc',
+        detailsColor: '#cbd5e1',
+        dotBg: '#0f172a',
+        dotBorder: '1.5px solid #94a3b8',
+        tagBg: '#0f172a',
+        tagColor: '#f8fafc',
+        tagBorder: '1px solid #94a3b8'
+      };
+    }
+    if (nearWhite) {
+      return {
+        bg: 'rgba(255, 255, 255, 0.18)',
+        border: '2px solid #ffffff',
+        cardBorder: '1px solid rgba(255, 255, 255, 0.6)',
+        accentBar: '#ffffff',
+        textColor: '#ffffff',
+        detailsColor: '#cbd5e1',
+        dotBg: '#ffffff',
+        dotBorder: '1px solid rgba(255, 255, 255, 0.4)',
+        tagBg: 'rgba(255, 255, 255, 0.15)',
+        tagColor: '#ffffff',
+        tagBorder: '1px solid rgba(255, 255, 255, 0.5)'
+      };
+    }
+    const isLuminous = yiq >= 180;
+    return {
+      bg: `${safeColor}${isLuminous ? '35' : '25'}`,
+      border: `2px solid ${safeColor}`,
+      cardBorder: `1px solid ${safeColor}65`,
+      accentBar: safeColor,
+      textColor: isLuminous ? safeColor : (yiq < 140 ? '#ffffff' : safeColor),
+      detailsColor: '#cbd5e1',
+      dotBg: safeColor,
+      dotBorder: '1px solid rgba(255, 255, 255, 0.35)',
+      tagBg: `${safeColor}${isLuminous ? '35' : '25'}`,
+      tagColor: isLuminous ? safeColor : (yiq < 140 ? '#ffffff' : safeColor),
+      tagBorder: `1px solid ${safeColor}66`
+    };
+  } else {
+    if (nearWhite) {
+      return {
+        bg: '#ffffff',
+        border: '2px solid #64748b',
+        cardBorder: '1px solid #94a3b8',
+        accentBar: '#64748b',
+        textColor: '#0f172a',
+        detailsColor: '#334155',
+        dotBg: '#ffffff',
+        dotBorder: '1.5px solid #64748b',
+        tagBg: '#f8fafc',
+        tagColor: '#0f172a',
+        tagBorder: '1px solid #94a3b8'
+      };
+    }
+    if (nearBlack) {
+      return {
+        bg: 'rgba(15, 23, 42, 0.08)',
+        border: '2px solid #0f172a',
+        cardBorder: '1px solid #0f172a',
+        accentBar: '#0f172a',
+        textColor: '#0f172a',
+        detailsColor: '#334155',
+        dotBg: '#0f172a',
+        dotBorder: '1px solid rgba(0, 0, 0, 0.3)',
+        tagBg: 'rgba(15, 23, 42, 0.08)',
+        tagColor: '#0f172a',
+        tagBorder: '1px solid #0f172a'
+      };
+    }
+    const isLuminous = yiq >= 180;
+    return {
+      bg: `${safeColor}${isLuminous ? '38' : '22'}`,
+      border: `2px solid ${safeColor}`,
+      cardBorder: `1px solid ${safeColor}55`,
+      accentBar: safeColor,
+      textColor: yiq > 130 ? '#0f172a' : safeColor,
+      detailsColor: '#334155',
+      dotBg: safeColor,
+      dotBorder: isLuminous ? '1px solid rgba(0, 0, 0, 0.35)' : '1px solid rgba(0, 0, 0, 0.15)',
+      tagBg: `${safeColor}${isLuminous ? '38' : '22'}`,
+      tagColor: yiq > 140 ? '#0f172a' : safeColor,
+      tagBorder: `1px solid ${safeColor}66`
+    };
+  }
+}
+
+export function getReadableClassTextColor(hexColor, isLightMode = true) {
+  if (!hexColor) return isLightMode ? '#0f172a' : '#ffffff';
+  const yiq = getColorYIQ(hexColor);
+  if (isLightMode) {
+    return yiq > 130 ? '#0f172a' : hexColor;
+  }
+  return yiq < 140 ? '#ffffff' : hexColor;
 }
 
 // State Store
@@ -323,11 +537,16 @@ export class StateStore {
           try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
           } catch (e) {}
+          if (typeof window !== 'undefined' && typeof window.refreshAllViews === 'function') {
+            window.refreshAllViews(false, true);
+          }
         }
       } else {
         PersistentStorageManager.saveToIndexedDB(this.data);
       }
     } catch (e) {}
+
+    this.updateStorageUI();
   }
 
   loadState() {
@@ -396,7 +615,6 @@ export class StateStore {
                     }
                   });
                 }
-                // If this year had mismatched terms and classes duplicate dataYear classes from legacy cloning, reset
                 if (yNum !== dataYear && termsMismatch && years[dataYear]) {
                   const baseClasses = years[dataYear].classes || [];
                   const baseIds = new Set(baseClasses.map(c => c.id));
@@ -505,6 +723,81 @@ export class StateStore {
     };
   }
 
+  indicateSaveStatus(status) {
+    if (typeof document === 'undefined') return;
+    const dot = document.getElementById('storage-status-dot');
+    const label = document.getElementById('storage-status-label');
+    if (dot && label) {
+      if (status === 'saving') {
+        dot.className = 'storage-dot saving';
+        label.textContent = 'Saving...';
+      } else if (status === 'saved') {
+        dot.className = 'storage-dot';
+        label.textContent = 'Saved';
+      } else if (status === 'error') {
+        dot.className = 'storage-dot';
+        dot.style.background = '#ef4444';
+        label.textContent = 'Storage Error';
+      }
+    }
+  }
+
+  async updateStorageUI() {
+    if (typeof document === 'undefined') return;
+    const badge = document.getElementById('storage-persist-badge');
+    const protStatus = document.getElementById('storage-protection-status');
+    const usageStatus = document.getElementById('storage-usage-status');
+    const engineStatus = document.getElementById('storage-engine-status');
+
+    const persisted = await PersistentStorageManager.checkPersistence();
+    this.isPersisted = persisted;
+
+    if (badge) {
+      if (persisted) {
+        badge.textContent = '🛡️ Protected (Persistent)';
+        badge.style.color = '#10b981';
+        badge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        badge.style.background = 'rgba(16, 185, 129, 0.1)';
+      } else {
+        badge.textContent = '⚡ Standard (Best-Effort)';
+        badge.style.color = 'var(--text-muted)';
+        badge.style.borderColor = 'var(--border-color)';
+        badge.style.background = 'var(--bg-surface)';
+      }
+    }
+
+    if (protStatus) {
+      protStatus.textContent = persisted
+        ? 'Guaranteed (Immune to browser auto-cleanup)'
+        : 'Standard (May be cleared if device storage is low)';
+      protStatus.style.color = persisted ? '#10b981' : 'var(--text-muted)';
+    }
+
+    if (engineStatus) {
+      const idbAvailable = (typeof indexedDB !== 'undefined');
+      engineStatus.textContent = idbAvailable
+        ? 'LocalStorage + IndexedDB (Dual Redundancy)'
+        : 'LocalStorage Active';
+    }
+
+    if (usageStatus) {
+      const estimate = await PersistentStorageManager.getStorageEstimate();
+      if (estimate && typeof estimate.usage === 'number') {
+        const usedKB = (estimate.usage / 1024).toFixed(1);
+        const totalMB = estimate.quota ? (estimate.quota / (1024 * 1024)).toFixed(0) : 'N/A';
+        usageStatus.textContent = `Used: ~${usedKB} KB (Quota: ~${totalMB} MB)`;
+      } else {
+        try {
+          const str = (typeof localStorage !== 'undefined') ? (localStorage.getItem(STORAGE_KEY) || '') : '';
+          const kb = (new Blob([str]).size / 1024).toFixed(1);
+          usageStatus.textContent = `Used: ~${kb} KB`;
+        } catch (e) {
+          usageStatus.textContent = 'Active';
+        }
+      }
+    }
+  }
+
   syncCurrentYearToYears() {
     if (Array.isArray(this.data.events)) {
       sortEventsChronologically(this.data.events);
@@ -525,14 +818,28 @@ export class StateStore {
 
   saveState() {
     this.syncCurrentYearToYears();
+    this.indicateSaveStatus('saving');
+
+    let localOk = false;
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+        localOk = true;
       }
     } catch (err) {
-      console.error('Error saving state', err);
+      console.error('Error saving state to localStorage', err);
+      if (err.name === 'QuotaExceededError' || err.code === 22) {
+        showToastNotification('⚠️ LocalStorage quota reached. Saving to persistent IndexedDB.');
+      }
     }
-    PersistentStorageManager.saveToIndexedDB(this.data);
+
+    PersistentStorageManager.saveToIndexedDB(this.data).then(() => {
+      setTimeout(() => {
+        this.indicateSaveStatus('saved');
+      }, 300);
+    }).catch(() => {
+      this.indicateSaveStatus(localOk ? 'saved' : 'error');
+    });
   }
 
   importState(imported) {
@@ -568,7 +875,7 @@ export class StateStore {
       };
     }
 
-    // Sanitize any existing years
+    // Sanitize all years
     Object.keys(years).forEach(yKey => {
       const yNum = parseInt(yKey, 10);
       const yStr = String(yNum);
@@ -661,9 +968,21 @@ export class StateStore {
     this.saveState();
   }
 
-  get theme() { return this.data.theme || 'dark'; }
+  get theme() { return this.data.theme || 'light'; }
   setTheme(newTheme) {
     this.data.theme = newTheme;
+    this.saveState();
+  }
+
+  get accent() { return this.data.accent || 'blue'; }
+  setAccent(newAccent) {
+    this.data.accent = newAccent;
+    this.saveState();
+  }
+
+  get homeworkGroupingMode() { return this.data.homeworkGroupingMode || 'category'; }
+  setHomeworkGroupingMode(mode) {
+    this.data.homeworkGroupingMode = (mode === 'lesson') ? 'lesson' : 'category';
     this.saveState();
   }
 
@@ -678,6 +997,7 @@ export class StateStore {
       delete lesson.pinnedDate;
       delete lesson.pinnedPeriodId;
       delete lesson.pinnedSlotKey;
+      showToastNotification(`📌 Unpinned "${lesson.title}"`);
     } else {
       lesson.isPinned = true;
       if (targetDate) lesson.pinnedDate = targetDate;
@@ -685,12 +1005,20 @@ export class StateStore {
       if (lesson.pinnedDate && lesson.pinnedPeriodId) {
         lesson.pinnedSlotKey = `${lesson.pinnedDate}_${lesson.pinnedPeriodId}`;
       }
+      const displayD = (typeof window !== 'undefined' && window.TermManager)
+        ? window.TermManager.formatDisplayDate(lesson.pinnedDate || 'Date')
+        : (lesson.pinnedDate || 'Date');
+      showToastNotification(`📌 Pinned "${lesson.title}" to ${displayD}`);
     }
 
     this.saveState();
+    if (typeof window !== 'undefined' && typeof window.refreshAllViews === 'function') {
+      window.refreshAllViews(false, true);
+    }
   }
 
   get terms() { return this.data.terms; }
+  set terms(val) { this.data.terms = val; }
   get events() { return this.data.events; }
 
   get academicYear() {
@@ -706,18 +1034,15 @@ export class StateStore {
     if (isNaN(yr) || yr < 2020 || yr > 2035) return;
     if (yr === this.data.academicYear && this.data.years && this.data.years[yr]) return;
 
-    // First sync current year's state into years[oldYear]
     this.syncCurrentYearToYears();
 
     this.data.academicYear = yr;
     if (!this.data.years) this.data.years = {};
 
     if (this.data.years[yr]) {
-      // Existing year! Restore its scoped data
       const yrData = this.data.years[yr];
       const yrStr = String(yr);
 
-      // Sanitize events to only keep events belonging to this year
       if (Array.isArray(yrData.events)) {
         yrData.events = yrData.events.filter(ev => {
           const d = ev.startDate || ev.date || '';
@@ -725,7 +1050,6 @@ export class StateStore {
         });
       }
 
-      // Sanitize terms to match this year's dates
       let hadWrongYearTerms = false;
       if (Array.isArray(yrData.terms)) {
         yrData.terms.forEach(term => {
@@ -743,7 +1067,6 @@ export class StateStore {
         });
       }
 
-      // If this year had wrong year terms and was an accidental legacy clone of 2026, purge it clean
       if (hadWrongYearTerms && yr !== 2026 && this.data.years[2026]) {
         const c2026 = this.data.years[2026].classes || [];
         const c2026Ids = new Set(c2026.map(c => c.id));
@@ -771,7 +1094,6 @@ export class StateStore {
       this.data.timetableCycleWeeks = yrData.timetableCycleWeeks || 2;
       this.data.currentDate = yrData.currentDate || `${yr}-07-22`;
     } else {
-      // Brand new year! Initialize empty events, classes, timetable
       const yrStr = String(yr);
       const newTerms = JSON.parse(JSON.stringify(DEFAULT_TERMS)).map(term => {
         const s = term.startDate.replace(/^\d{4}/, yrStr);
@@ -806,12 +1128,6 @@ export class StateStore {
   get timetableCycleWeeks() { return this.data.timetableCycleWeeks || 2; }
   get currentDate() { return this.data.currentDate || '2026-07-22'; }
   get timeFormat() { return this.data.timeFormat || '12h'; }
-  get homeworkGroupingMode() { return this.data.homeworkGroupingMode || 'category'; }
-
-  setHomeworkGroupingMode(mode) {
-    this.data.homeworkGroupingMode = (mode === 'lesson') ? 'lesson' : 'category';
-    this.saveState();
-  }
 
   setCurrentDate(dateStr) {
     this.data.currentDate = dateStr;
@@ -841,7 +1157,7 @@ export class StateStore {
 
     const colorIndex = this.classes.length % PALETTE.length;
     const newClass = {
-      id: `c_${Date.now()}_${Math.floor(Math.random()*1000)}`,
+      id: `c_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       name: trimmed,
       subject: trimmed,
       color: color || PALETTE[colorIndex],
@@ -855,12 +1171,69 @@ export class StateStore {
   deleteClassById(classId) {
     this.data.classes = this.classes.filter(c => c.id !== classId);
     delete this.data.lessonPlans[classId];
-    // Clean timetable slots assigned to this class
+
+    // Clean references in other classes' linkedClassIds
+    this.data.classes.forEach(c => {
+      if (Array.isArray(c.linkedClassIds)) {
+        c.linkedClassIds = c.linkedClassIds.filter(id => id !== classId);
+      }
+    });
+
+    // Clean timetable slots and slot details assigned to this class
     for (const slotKey in this.data.timetableSlots) {
-      if (this.data.timetableSlots[slotKey] === classId) {
+      const val = this.data.timetableSlots[slotKey];
+      const assignedId = typeof val === 'string' ? val : (val ? val.classId : null);
+      if (assignedId === classId) {
         delete this.data.timetableSlots[slotKey];
+        if (this.data.timetableSlotDetails) {
+          delete this.data.timetableSlotDetails[slotKey];
+        }
       }
     }
+
+    // Clean references in blockout events
+    if (Array.isArray(this.data.events)) {
+      this.data.events.forEach(ev => {
+        if (ev.affectedClassId === classId) {
+          ev.affectedClassId = null;
+        }
+        if (Array.isArray(ev.affectedClassIds)) {
+          ev.affectedClassIds = ev.affectedClassIds.filter(id => id !== classId);
+          if (ev.affectedClassIds.length === 0) {
+            ev.affectedClassIds = ['ALL'];
+          }
+        }
+      });
+    }
+
+    this.saveState();
+  }
+
+  deletePeriodById(periodId) {
+    if (!periodId) return;
+    this.data.periods = this.periods.filter(p => p.id !== periodId);
+
+    // Clean any timetable slots referencing this period
+    const suffix = `_${periodId}`;
+    for (const slotKey in this.data.timetableSlots) {
+      if (slotKey.endsWith(suffix)) {
+        delete this.data.timetableSlots[slotKey];
+        if (this.data.timetableSlotDetails) {
+          delete this.data.timetableSlotDetails[slotKey];
+        }
+      }
+    }
+
+    // Clean any events blocking this specific period
+    if (Array.isArray(this.data.events)) {
+      this.data.events.forEach(ev => {
+        if (ev.blockedPeriod === periodId) {
+          ev.blockedPeriod = null;
+          ev.blockAllDay = true;
+        }
+      });
+    }
+
     this.saveState();
   }
 
@@ -945,11 +1318,26 @@ export class StateStore {
 
   syncAllLinkedLessonsWithOptions(sourceClassId, targetClassId, options = { classwork: true, titles: true, content: true }, filterAfterLockThreshold = false) {
     const sourceLessons = this.data.lessonPlans[sourceClassId] || [];
+    const currentDateStr = this.currentDate;
     let lessonsToSync = sourceLessons;
 
     if (filterAfterLockThreshold) {
-      const currentDateStr = this.currentDate;
-      lessonsToSync = sourceLessons.filter(l => !l.testDate || l.testDate >= currentDateStr);
+      if (typeof window !== 'undefined' && window.Scheduler && typeof window.Scheduler.generateScheduleForClass === 'function') {
+        const { schedule } = window.Scheduler.generateScheduleForClass(sourceClassId);
+        const validLessonIds = new Set();
+        schedule.forEach(entry => {
+          if (entry.slot && entry.slot.date >= currentDateStr && entry.lesson) {
+            if (Array.isArray(entry.lesson.mergedLessonIds)) {
+              entry.lesson.mergedLessonIds.forEach(id => validLessonIds.add(id));
+            } else {
+              validLessonIds.add(entry.lesson.id);
+            }
+          }
+        });
+        lessonsToSync = sourceLessons.filter(l => validLessonIds.has(l.id));
+      } else {
+        lessonsToSync = sourceLessons.filter(l => !l.testDate || l.testDate >= currentDateStr);
+      }
     }
 
     lessonsToSync.forEach(sourceLesson => {
@@ -961,3 +1349,11 @@ export class StateStore {
 
 export const state = new StateStore();
 
+if (typeof window !== 'undefined') {
+  window.state = state;
+  window.PersistentStorageManager = PersistentStorageManager;
+  window.showToastNotification = showToastNotification;
+  window.showReanalysisSummaryToast = showReanalysisSummaryToast;
+  window.getClassCellStyles = getClassCellStyles;
+  window.getReadableClassTextColor = getReadableClassTextColor;
+}

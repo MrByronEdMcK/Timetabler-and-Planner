@@ -60,28 +60,57 @@ console.log('\nTest 6: Test Milestone & Capacity Conflict Analysis');
 const conflicts = Scheduler.analyzeConflicts('c1');
 assert(Array.isArray(conflicts), `Conflict analysis completed successfully (${conflicts.length} conflicts found)`);
 
-// Test 7: Drop Revision Lesson Resolution
-console.log('\nTest 7: Drop Tagged Revision Lesson Resolution');
+// Test 7: Non-Destructive Drop & Restore Revision Lesson Resolution
+console.log('\nTest 7: Non-Destructive Omit & Restore Tagged Revision Lesson Resolution');
 const initialLessonsCount = (state.lessonPlans['c1'] || []).length;
 const revisionLesson = state.lessonPlans['c1'].find(l => l.isRevision);
 
 if (revisionLesson) {
   Scheduler.dropRevisionLesson('c1', revisionLesson.id);
-  const newCount = (state.lessonPlans['c1'] || []).length;
-  assert(newCount === initialLessonsCount - 1, `Successfully pruned revision lesson "${revisionLesson.title}" (Count: ${initialLessonsCount} -> ${newCount})`);
+  const rawCountAfterDrop = (state.lessonPlans['c1'] || []).length;
+  const effectiveAfterDrop = Scheduler.applyManualScheduleAdjustments(state.lessonPlans['c1']);
+  assert(
+    rawCountAfterDrop === initialLessonsCount && effectiveAfterDrop.length === initialLessonsCount - 1,
+    `Non-destructively omitted revision lesson "${revisionLesson.title}" from schedule while preserving in View 3 (Effective: ${initialLessonsCount} -> ${effectiveAfterDrop.length})`
+  );
+  Scheduler.restoreRevisionLesson('c1', revisionLesson.id);
+  const effectiveAfterRestore = Scheduler.applyManualScheduleAdjustments(state.lessonPlans['c1']);
+  assert(
+    effectiveAfterRestore.length === initialLessonsCount,
+    `Successfully restored omitted revision lesson "${revisionLesson.title}" back to active schedule`
+  );
 } else {
-  assert(false, `No revision lesson found to prune`);
+  assert(false, `No revision lesson found to omit`);
 }
 
-// Test 8: Merge Lessons Resolution
-console.log('\nTest 8: Combine / Merge 2 Lessons Resolution');
+// Test 8: Non-Destructive Merge & Unmerge Lessons Resolution
+console.log('\nTest 8: Non-Destructive Combine / Merge & Unmerge 2 Lessons Resolution');
 const beforeMergeCount = (state.lessonPlans['c1'] || []).length;
 if (beforeMergeCount >= 2) {
   const l1 = state.lessonPlans['c1'][0];
   const l2 = state.lessonPlans['c1'][1];
   const success = Scheduler.mergeLessons('c1', l1.id, l2.id);
-  const afterMergeCount = (state.lessonPlans['c1'] || []).length;
-  assert(success && afterMergeCount === beforeMergeCount - 1, `Successfully merged two lessons into 1 single period slot (Count: ${beforeMergeCount} -> ${afterMergeCount})`);
+  const rawAfterMergeCount = (state.lessonPlans['c1'] || []).length;
+  const effectiveAfterMerge = Scheduler.applyManualScheduleAdjustments(state.lessonPlans['c1']);
+  const mergedObj = effectiveAfterMerge[0];
+  assert(
+    success && rawAfterMergeCount === beforeMergeCount && effectiveAfterMerge.length === beforeMergeCount - 1,
+    `Non-destructively merged two lessons into 1 schedule slot while keeping both lessons in View 3 (Effective: ${beforeMergeCount} -> ${effectiveAfterMerge.length})`
+  );
+  assert(
+    mergedObj && mergedObj.title === `Merged: ${l1.title}, ${l2.title}`,
+    `Merged lesson titled "${mergedObj ? mergedObj.title : ''}" matches "Merged: {Title 1}, {Title 2}" format`
+  );
+  assert(
+    mergedObj && mergedObj.content.includes(`=== 1. ${l1.title} ===`) && mergedObj.content.includes(`=== 2. ${l2.title} ===`),
+    `Merged lesson teaching notes clearly split by lesson with titling`
+  );
+  const unmerged = Scheduler.unmergeLessons('c1', l1.id);
+  const effectiveAfterUnmerge = Scheduler.applyManualScheduleAdjustments(state.lessonPlans['c1']);
+  assert(
+    unmerged && effectiveAfterUnmerge.length === beforeMergeCount,
+    `Successfully unmerged lessons back into separate single-period slots (${effectiveAfterUnmerge.length} slots)`
+  );
 }
 
 // Test 9: Daylight Saving Time (DST) calculation resilience

@@ -839,6 +839,40 @@
       return 'Homework summary and whiteboard view cleanly display Catch Up for lessons without homework, strictly use Lesson 1, Lesson 2 headers, and format multiple chapter tasks with pipe separators.';
     });
 
+    // 25. Non-Destructive Lesson Merging (Merged: Title 1, Title 2), Ordered Tasks & Split Notes
+    test('Non-Destructive Lesson Merging (Merged: Title 1, Title 2), Ordered Tasks & Split Notes', () => {
+      const l1 = {
+        id: 'test_l1',
+        title: 'Index Laws 1 & 2',
+        unit: 'Algebra',
+        content: 'Multiply and divide powers with the same base.',
+        classwork: [{ type: 'Textbook', work: '3A Q1-5', link: '' }]
+      };
+      const l2 = {
+        id: 'test_l2',
+        title: 'Zero & Negative Indices',
+        unit: 'Algebra',
+        content: 'Evaluate expressions with zero and negative indices.',
+        classwork: [{ type: 'Worksheets', work: 'Worksheet 2', link: '' }]
+      };
+
+      const merged = Scheduler.buildMergedLessonObject(l1, l2, true);
+      if (merged.title !== 'Merged: Index Laws 1 & 2, Zero & Negative Indices') {
+        throw new Error(`Expected "Merged: Index Laws 1 & 2, Zero & Negative Indices", got "${merged.title}"`);
+      }
+      if (!merged.isMerged || !merged.isManualMerge) {
+        throw new Error('Merged lesson flags (isMerged, isManualMerge) not set properly');
+      }
+      if (merged.classwork.length !== 2 || merged.classwork[0].work !== '3A Q1-5' || merged.classwork[1].work !== 'Worksheet 2') {
+        throw new Error('Merged lesson classwork tasks were not maintained in prior lesson order');
+      }
+      if (!merged.content.includes('=== 1. Index Laws 1 & 2 ===') || !merged.content.includes('=== 2. Zero & Negative Indices ===')) {
+        throw new Error('Merged lesson teaching notes were not split by lesson with titling');
+      }
+
+      return 'Merged lessons are non-destructively titled "Merged: {Title 1}, {Title 2}" with ordered tasks and titled split teaching notes.';
+    });
+
     const elapsed = Math.round(performance.now() - startTime);
 
     // Update UI

@@ -1,27 +1,10 @@
 /* ==========================================================================
-   Auto-Scheduler, Pacing Engine & Conflict Resolver
+   Auto-Scheduler, Pacing Engine & Non-Destructive Conflict Resolver
    ========================================================================== */
 
 import { state } from './state.js';
 import { TermManager } from './termManager.js';
-import { TimetableManager } from './timetableManager.js';
-
-function formatSingleTime(timeStr) {
-  if (!timeStr) return '';
-  if (state.timeFormat === '24h') return timeStr;
-  const [hStr, mStr] = timeStr.split(':');
-  let h = parseInt(hStr, 10);
-  if (isNaN(h)) return timeStr;
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12;
-  if (h === 0) h = 12;
-  return `${h}:${mStr || '00'} ${ampm}`;
-}
-
-function formatTimeRange(startStr, endStr) {
-  if (!startStr && !endStr) return '';
-  return `${formatSingleTime(startStr)} - ${formatSingleTime(endStr)}`;
-}
+import { TimetableManager, formatTimeRange } from './timetableManager.js';
 
 export const Scheduler = {
   reanalysisStats: {
@@ -83,6 +66,98 @@ export const Scheduler = {
     }
   },
 
+  /**
+   * Builds a non-destructive merged lesson representation from two adjacent lessons.
+   * Format: "Merged: {Title 1}, {Title 2}"
+   * Preserves tasks in lesson order (Lesson 1 tasks first, then Lesson 2 tasks)
+   * and clearly splits teaching notes by lesson with titling.
+   */
+  buildMergedLessonObject(l1, l2, isManualMerge = false) {
+    const cw1 = Array.isArray(l1.classwork) ? JSON.parse(JSON.stringify(l1.classwork)) : [];
+    const cw2 = Array.isArray(l2.classwork) ? JSON.parse(JSON.stringify(l2.classwork)) : [];
+    const combinedClasswork = [...cw1, ...cw2];
+
+    const notes1 = (l1.content && l1.content.trim()) ? l1.content.trim() : '(No teaching notes)';
+    const notes2 = (l2.content && l2.content.trim()) ? l2.content.trim() : '(No teaching notes)';
+    const combinedContent = `=== 1. ${l1.title} ===\n${notes1}\n\n=== 2. ${l2.title} ===\n${notes2}`;
+
+    return {
+      id: `merged_${l1.id}_${l2.id}`,
+      title: `Merged: ${l1.title}, ${l2.title}`,
+      unit: l1.unit || l2.unit || 'General Curriculum',
+      isMerged: true,
+      isManualMerge: Boolean(isManualMerge),
+      isRevision: Boolean(l1.isRevision && l2.isRevision),
+      mergedLessonIds: [l1.id, l2.id],
+      mergedTitles: [l1.title, l2.title],
+      classwork: combinedClasswork,
+      content: combinedContent
+    };
+  },
+
+  /**
+   * Applies non-destructive manual schedule adjustments (manual revision omissions
+   * and manual adjacent lesson merges) while keeping original lessons intact in state.lessonPlans.
+   * Automatically clears stale merge flags if lessons were rearranged so they are no longer adjacent.
+   */
+  applyManualScheduleAdjustments(lessonsList) {
+    if (!Array.isArray(lessonsList) || lessonsList.length === 0) return [];
+    const result = [];
+    let i = 0;
+    while (i < lessonsList.length) {
+      const curr = lessonsList[i];
+      if (!curr) {
+        i++;
+        continue;
+      }
+      if (curr.isOmittedFromSchedule) {
+        i++;
+        continue;
+      }
+      if (curr.mergeWithNextId) {
+        const next = lessonsList[i + 1];
+        if (next && !next.isOmittedFromSchedule && next.id === curr.mergeWithNextId && !curr.isTestMilestone && !next.isTestMilestone) {
+          result.push(this.buildMergedLessonObject(curr, next, true));
+          i += 2;
+          continue;
+        } else {
+          // Schedule/sequence was rearranged so these two lessons are no longer adjacent — auto-unmerge!
+          delete curr.mergeWithNextId;
+        }
+      }
+      result.push(curr);
+      i++;
+    }
+    return result;
+  },
+
+  /**
+   * Resolves a lesson ID (either a direct lesson ID in state.lessonPlans or a synthetic merged_l1_l2 ID)
+   * into its lesson object so clicking any regular or merged card in View 4 or View 5 works seamlessly.
+   */
+  resolveLessonOrMerged(classId, lessonId) {
+    if (!classId || !lessonId) return null;
+    const rawLessons = state.lessonPlans[classId] || [];
+    const direct = rawLessons.find(l => l.id === lessonId);
+    if (direct) return direct;
+
+    if (String(lessonId).startsWith('merged_')) {
+      const { schedule } = this.generateScheduleForClass(classId);
+      const fromSched = schedule.find(s => s.lesson && s.lesson.id === lessonId);
+      if (fromSched && fromSched.lesson) return fromSched.lesson;
+
+      // Fallback: match by constituent IDs
+      for (let i = 0; i < rawLessons.length - 1; i++) {
+        const l1 = rawLessons[i];
+        const l2 = rawLessons[i + 1];
+        if (`merged_${l1.id}_${l2.id}` === lessonId) {
+          return this.buildMergedLessonObject(l1, l2, l1.mergeWithNextId === l2.id);
+        }
+      }
+    }
+    return null;
+  },
+
   getAllClassSlotsForYear(classId) {
     if (!classId) {
       console.error('[SCHEDULER ENGINE ERROR] getAllClassSlotsForYear called with invalid classId:', classId);
@@ -127,7 +202,8 @@ export const Scheduler = {
   },
 
   generateScheduleForClass(classId) {
-    const lessons = state.lessonPlans[classId] || [];
+    const rawLessons = state.lessonPlans[classId] || [];
+    const lessons = this.applyManualScheduleAdjustments(rawLessons);
     const availableSlots = this.getAvailableSlots(classId);
 
     if (availableSlots.length === 0 || lessons.length === 0) {
@@ -138,9 +214,6 @@ export const Scheduler = {
         unassignedLessons: lessons
       };
     }
-
-    console.warn(`==================================================`);
-    console.warn(`[SCHEDULER TROUBLESHOOTING] Generating schedule for Class ${classId}: ${lessons.length} lessons mapped onto ${availableSlots.length} slots.`);
 
     // 1. Find all milestone/anchored test lessons or pinned lessons with target dates/slot keys
     const candidateMilestones = [];
@@ -174,9 +247,9 @@ export const Scheduler = {
         }
 
         if (slotIdx >= 0) {
-          candidateMilestones.push({ 
-            lessonIndex: index, 
-            lesson: lesson, 
+          candidateMilestones.push({
+            lessonIndex: index,
+            lesson: lesson,
             targetSlotIdx: slotIdx,
             isPinned: isPinnedLesson && !isExplicitTest,
             targetDate: targetDate
@@ -185,10 +258,9 @@ export const Scheduler = {
       }
     });
 
-    // Sort candidate milestones by lessonIndex ascending
     candidateMilestones.sort((a, b) => a.lessonIndex - b.lessonIndex);
 
-    // Filter milestones: Unpin pinned lessons ONLY IF upstream insertion created a slot deficit prior to their pinned date!
+    // Filter milestones: Unpin pinned lessons ONLY IF upstream insertion created a slot deficit prior to their pinned date
     const milestones = [];
     let currentLessonCheckStart = 0;
     let currentSlotCheckStart = 0;
@@ -207,7 +279,6 @@ export const Scheduler = {
 
           const classObj = state.classes.find(c => c.id === classId);
           this.reanalysisStats.addUnpinned(classObj ? classObj.name : classId, m.lesson.title, m.lesson.id);
-          console.warn(`[SCHEDULER UNPIN] Lesson "${m.lesson.title}" was automatically unpinned because sequence order or capacity required ${windowLessons.length} lessons for ${windowSlotsCount} available slots.`);
         } else if (isOutOfOrder && m.lesson.isTestMilestone) {
           delete m.lesson.testDate;
           delete m.lesson.testPeriodId;
@@ -215,7 +286,6 @@ export const Scheduler = {
 
           const classObj = state.classes.find(c => c.id === classId);
           this.reanalysisStats.addUnpinned(classObj ? classObj.name : classId, `${m.lesson.title} (Test Date Cleared)`, m.lesson.id);
-          console.warn(`[SCHEDULER TEST DATE CLEARED] Test lesson "${m.lesson.title}" had an out-of-order test date after unit/lesson reordering; cleared test date.`);
         } else {
           milestones.push(m);
           currentLessonCheckStart = m.lessonIndex + 1;
@@ -230,7 +300,6 @@ export const Scheduler = {
 
     const slotToLesson = new Array(availableSlots.length).fill(null);
 
-    // If no valid milestones remain, process whole sequence as a single scope
     if (milestones.length === 0) {
       const prioritizedLessons = this.getPrioritizedLessonsForCapacity(lessons, availableSlots.length, 'Full Term Window', classId);
       prioritizedLessons.forEach((l, idx) => {
@@ -239,7 +308,6 @@ export const Scheduler = {
         }
       });
     } else {
-      // Divide sequence into self-contained Topic Windows bounded by scheduled anchors!
       let currentLessonStart = 0;
       let currentSlotStart = 0;
 
@@ -247,21 +315,14 @@ export const Scheduler = {
         const milestoneLessonIdx = m.lessonIndex;
         const milestoneSlotIdx = m.targetSlotIdx;
 
-        // Place milestone lesson strictly at its anchored slot
         slotToLesson[milestoneSlotIdx] = m.lesson;
 
-        // Topic Window lessons before this milestone
         const windowLessons = lessons.slice(currentLessonStart, milestoneLessonIdx);
-
-        // Available slots before this milestone slot
         const windowSlotsCount = Math.max(0, milestoneSlotIdx - currentSlotStart);
-
         const windowName = `Topic Window #${mIdx + 1} (${m.lesson.unit || 'Topic'} - before ${m.lesson.testDate || m.lesson.pinnedDate || 'Anchor'})`;
-        console.warn(`[Topic Window Range] "${windowName}": ${windowLessons.length} lesson(s) mapped to ${windowSlotsCount} available slot(s) (Slots ${currentSlotStart} to ${milestoneSlotIdx - 1}).`);
 
         const prioritizedWindow = this.getPrioritizedLessonsForCapacity(windowLessons, windowSlotsCount, windowName, classId);
 
-        // Map prioritized window lessons to slots within this window
         let fillSlotIdx = currentSlotStart;
         prioritizedWindow.forEach((l) => {
           while (fillSlotIdx < milestoneSlotIdx && slotToLesson[fillSlotIdx] !== null) {
@@ -277,12 +338,10 @@ export const Scheduler = {
         currentSlotStart = Math.max(currentSlotStart, milestoneSlotIdx + 1);
       });
 
-      // Process remaining lessons after the last milestone
       if (currentLessonStart < lessons.length && currentSlotStart < availableSlots.length) {
         const remainingLessons = lessons.slice(currentLessonStart);
         const remainingSlotsCount = availableSlots.length - currentSlotStart;
         const windowName = `Post-Assessment Window (Slots ${currentSlotStart} to ${availableSlots.length - 1})`;
-        console.warn(`[Topic Window Range] "${windowName}": ${remainingLessons.length} lesson(s) mapped to ${remainingSlotsCount} remaining slot(s).`);
 
         const prioritizedRemaining = this.getPrioritizedLessonsForCapacity(remainingLessons, remainingSlotsCount, windowName, classId);
 
@@ -305,20 +364,30 @@ export const Scheduler = {
       isLocked: slot.isPast
     }));
 
-    const assignedSet = new Set(slotToLesson.filter(l => l !== null).map(l => l.id));
-    const unassignedLessons = lessons.filter(l => !assignedSet.has(l.id));
-
-    console.warn(`[SCHEDULER SUCCESS] Completed schedule generation for Class ${classId}. Assigned ${assignedSet.size} lesson(s).`);
-    console.warn(`==================================================`);
+    const assignedSet = new Set();
+    slotToLesson.filter(l => l !== null).forEach(l => {
+      assignedSet.add(l.id);
+      if (Array.isArray(l.mergedLessonIds)) {
+        l.mergedLessonIds.forEach(id => assignedSet.add(id));
+      }
+    });
+    const unassignedLessons = rawLessons.filter(l => !l.isOmittedFromSchedule && !assignedSet.has(l.id));
 
     return {
       schedule: schedule,
       totalSlots: availableSlots.length,
-      totalLessons: lessons.length,
+      totalLessons: rawLessons.length,
       unassignedLessons: unassignedLessons
     };
   },
 
+  /**
+   * 3-Pass Priority Resolution when slot capacity is tight:
+   * Pass 1: Omit Float lessons (`isFloat`) FIRST working backwards from test milestone.
+   * Pass 2: Omit Revision lessons (`isRevision`) SECOND working backwards from test milestone.
+   * Pass 3: Combine/Merge adjacent regular Content lessons into single period slots THIRD ("Merged: {Title 1}, {Title 2}")
+   *         preserving tasks in order and splitting teaching notes with titles.
+   */
   getPrioritizedLessonsForCapacity(lessonsList, targetCapacity, windowName = 'Schedule', classId = null) {
     if (lessonsList.length <= targetCapacity) return lessonsList;
 
@@ -327,15 +396,12 @@ export const Scheduler = {
     const classObj = state.classes.find(c => c.id === classId);
     const className = classObj ? classObj.name : 'Class';
 
-    console.warn(`[Topic Window Scoped Resolution] Scope "${windowName}" has ${lessonsList.length} lessons for ${targetCapacity} available slots. Capacity deficit: ${deficit} lesson(s).`);
-
     // Pass 1: Omit Float lessons FIRST (working backwards from closest to test milestone)
     for (let i = result.length - 1; i >= 0 && deficit > 0; i--) {
       if (result[i] && result[i].isFloat) {
         const removed = result.splice(i, 1)[0];
         deficit--;
         this.reanalysisStats.addOmittedFloat(className, removed.title, removed.id);
-        console.warn(`[Topic Window Hiding PASS 1] Omitted Float lesson "${removed.title}" (${removed.unit || 'General'}) from "${windowName}". Remaining deficit: ${deficit}`);
       }
     }
 
@@ -345,36 +411,25 @@ export const Scheduler = {
         const removed = result.splice(i, 1)[0];
         deficit--;
         this.reanalysisStats.addOmittedRevision(className, removed.title, removed.id);
-        console.warn(`[Topic Window Hiding PASS 2] Omitted low-priority Revision lesson "${removed.title}" (${removed.unit || 'General'}) from "${windowName}". Remaining deficit: ${deficit}`);
       }
     }
 
-    // Pass 3: Combine/Merge adjacent Content lessons into single period slots if deficit still remains!
+    // Pass 3: Combine/Merge adjacent Content lessons into single period slots if deficit still remains
     if (deficit > 0 && result.length > 1) {
-      console.warn(`[Topic Window Merging PASS 3] Merging content lessons to fit ${targetCapacity} slots (Deficit: ${deficit}).`);
       let i = result.length - 2;
       while (i >= 0 && deficit > 0) {
         const l1 = result[i];
         const l2 = result[i + 1];
-        if (l1 && l2 && !l1.isTestMilestone && !l2.isTestMilestone) {
-          const mergedLesson = {
-            id: `merged_${l1.id}_${l2.id}`,
-            title: `${l1.title} + ${l2.title}`,
-            unit: l1.unit || l2.unit || 'General Curriculum',
-            isMerged: true,
-            mergedTitles: [l1.title, l2.title],
-            content: `COMBINED LESSON PERIOD:\n\n1. ${l1.title}:\n${l1.content || '(No notes)'}\n\n2. ${l2.title}:\n${l2.content || '(No notes)'}`
-          };
+        if (l1 && l2 && !l1.isTestMilestone && !l2.isTestMilestone && !l1.isMerged && !l2.isMerged) {
+          const mergedLesson = this.buildMergedLessonObject(l1, l2, false);
           result.splice(i, 2, mergedLesson);
           deficit--;
           this.reanalysisStats.addMerged(className, l1.title, l2.title, mergedLesson.id);
-          console.warn(`[Topic Window Merged] Combined "${l1.title}" and "${l2.title}" into single period slot "${mergedLesson.title}". Remaining deficit: ${deficit}`);
         }
         i--;
       }
     }
 
-    // Safety fallback
     if (result.length > targetCapacity) {
       return result.slice(0, targetCapacity);
     }
@@ -415,7 +470,6 @@ export const Scheduler = {
     const downstreamRevisions = downstreamEntries.filter(m => m.lesson && m.lesson.isRevision && !m.lesson.isFloat);
     const emptySlotsCount = downstreamEntries.filter(m => m.lesson === null).length;
 
-    // Only require REVISION_SHIFT if capacity is full (no empty slots to absorb a float shift)
     if (emptySlotsCount === 0 && downstreamRevisions.length > 0) {
       const nextRevision = downstreamRevisions[0].lesson;
       return {
@@ -425,7 +479,6 @@ export const Scheduler = {
       };
     }
 
-    // If no empty slots and no downstream revisions, capacity is maximally filled
     if (emptySlotsCount === 0 && downstreamRevisions.length === 0) {
       return {
         type: 'MAX_CAPACITY',
@@ -433,25 +486,31 @@ export const Scheduler = {
       };
     }
 
-    // Otherwise, free slots exist to absorb the float shift!
     return { type: 'FLOAT' };
   },
 
   analyzeConflicts(classId) {
-    if (classId === 'ALL') return [];
-    const lessons = state.lessonPlans[classId] || [];
+    if (!classId || classId === 'ALL') return [];
+    const rawLessons = state.lessonPlans[classId] || [];
+    const effectiveLessons = this.applyManualScheduleAdjustments(rawLessons);
     const availableSlots = this.getAvailableSlots(classId);
     const conflicts = [];
 
-    lessons.forEach((lesson, index) => {
+    effectiveLessons.forEach((lesson, index) => {
       if (lesson.isTestMilestone && lesson.testDate) {
         const testDate = lesson.testDate;
         const requiredCount = index + 1;
-        const slotsBeforeTest = availableSlots.filter(s => s.date <= testDate).length;
+        let slotsBeforeTest = 0;
+        if (lesson.testSlotKey) {
+          const exactIdx = availableSlots.findIndex(s => `${s.date}_${s.periodId}` === lesson.testSlotKey);
+          slotsBeforeTest = exactIdx >= 0 ? (exactIdx + 1) : availableSlots.filter(s => s.date <= testDate).length;
+        } else {
+          slotsBeforeTest = availableSlots.filter(s => s.date <= testDate).length;
+        }
 
         if (slotsBeforeTest < requiredCount) {
           const deficit = requiredCount - slotsBeforeTest;
-          const revisionLessons = lessons.slice(0, requiredCount).filter(l => l.isRevision);
+          const revisionLessons = effectiveLessons.slice(0, requiredCount).filter(l => l.isRevision && !l.isMerged);
           conflicts.push({
             classId: classId,
             testLesson: lesson,
@@ -465,14 +524,14 @@ export const Scheduler = {
       }
     });
 
-    if (availableSlots.length < lessons.length) {
-      const deficit = lessons.length - availableSlots.length;
-      const revisionLessons = lessons.filter(l => l.isRevision);
+    if (availableSlots.length < effectiveLessons.length) {
+      const deficit = effectiveLessons.length - availableSlots.length;
+      const revisionLessons = effectiveLessons.filter(l => l.isRevision && !l.isMerged);
       conflicts.push({
         classId: classId,
         testLesson: { title: 'End of Curriculum Completion' },
         testDate: 'End of Year',
-        requiredLessons: lessons.length,
+        requiredLessons: effectiveLessons.length,
         availableSlots: availableSlots.length,
         deficit: deficit,
         revisionLessons: revisionLessons,
@@ -483,36 +542,63 @@ export const Scheduler = {
     return conflicts;
   },
 
+  /**
+   * Non-destructively omits a revision lesson from the active schedule projection
+   * while preserving it in state.lessonPlans (View 3 curriculum list & backend)
+   * so it can be restored anytime.
+   */
   dropRevisionLesson(classId, lessonId) {
     const lessons = state.lessonPlans[classId] || [];
-    state.lessonPlans[classId] = lessons.filter(l => l.id !== lessonId);
+    const target = lessons.find(l => l.id === lessonId);
+    if (!target) return false;
+    target.isOmittedFromSchedule = true;
     state.saveState();
+    return true;
   },
 
+  restoreRevisionLesson(classId, lessonId) {
+    const lessons = state.lessonPlans[classId] || [];
+    const target = lessons.find(l => l.id === lessonId);
+    if (!target) return false;
+    delete target.isOmittedFromSchedule;
+    state.saveState();
+    return true;
+  },
+
+  /**
+   * Non-destructively flags two adjacent lessons in state.lessonPlans to merge
+   * into a single period slot ("Merged: {Title 1}, {Title 2}") in the schedule projection,
+   * while maintaining the original two separate lessons in the View 3 curriculum list and backend.
+   */
   mergeLessons(classId, lessonId1, lessonId2) {
     const lessons = state.lessonPlans[classId] || [];
     const idx1 = lessons.findIndex(l => l.id === lessonId1);
     const idx2 = lessons.findIndex(l => l.id === lessonId2);
 
-    if (idx1 === -1 || idx2 === -1) return false;
-
-    const l1 = lessons[idx1];
-    const l2 = lessons[idx2];
-
-    const mergedLesson = {
-      id: `merged_${Date.now()}`,
-      title: `${l1.title} + ${l2.title}`,
-      unit: l1.unit || l2.unit,
-      isRevision: l1.isRevision || l2.isRevision,
-      isMerged: true,
-      mergedTitles: [l1.title, l2.title]
-    };
+    if (idx1 === -1 || idx2 === -1 || Math.abs(idx1 - idx2) !== 1) return false;
 
     const firstIdx = Math.min(idx1, idx2);
-    lessons.splice(firstIdx, 2, mergedLesson);
-    state.lessonPlans[classId] = lessons;
+    const secondIdx = Math.max(idx1, idx2);
+    const l1 = lessons[firstIdx];
+    const l2 = lessons[secondIdx];
+
+    if (l1.isTestMilestone || l2.isTestMilestone) return false;
+
+    l1.mergeWithNextId = l2.id;
+    state.saveState();
+    return true;
+  },
+
+  unmergeLessons(classId, lessonId1) {
+    const lessons = state.lessonPlans[classId] || [];
+    const target = lessons.find(l => l.id === lessonId1 || `merged_${l.id}_${l.mergeWithNextId}` === lessonId1);
+    if (!target) return false;
+    delete target.mergeWithNextId;
     state.saveState();
     return true;
   }
 };
 
+if (typeof window !== 'undefined') {
+  window.Scheduler = Scheduler;
+}

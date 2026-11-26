@@ -2,11 +2,11 @@
    Term Calendar & Date Utilities - Local Computer Time & Date Engine
    ========================================================================== */
 
-import { state } from './state.js';
+import { state, calculateTermWeeks } from './state.js';
 
 export const TermManager = {
   /**
-   * Helper to parse YYYY-MM-DD or Date to local noon Date object
+   * Helper to parse YYYY-MM-DD or Date to local noon Date object (DST-safe)
    */
   parseLocalDate(dateStr) {
     if (!dateStr) return null;
@@ -46,19 +46,7 @@ export const TermManager = {
    * School weeks align to Monday-Friday in Australian schools.
    */
   calculateTermWeeks(startDateStr, endDateStr) {
-    if (!startDateStr || !endDateStr) return 10;
-    const start = this.parseLocalDate(startDateStr);
-    const end = this.parseLocalDate(endDateStr);
-    if (!start || !end || end < start) return 10;
-
-    const dayOfWeek = start.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-    const diffToMon = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
-    const monStart = new Date(start);
-    monStart.setDate(monStart.getDate() + diffToMon);
-
-    const diffTime = end.getTime() - monStart.getTime();
-    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-    return Math.max(1, Math.floor(diffDays / 7) + 1);
+    return calculateTermWeeks(startDateStr, endDateStr);
   },
 
   /**
@@ -122,11 +110,10 @@ export const TermManager = {
     state.terms.forEach(term => {
       const current = this.parseLocalDate(term.startDate);
       const end = this.parseLocalDate(term.endDate);
-      if (!current || !end) return;
+      if (!current || !end || end < current) return;
 
       while (current <= end) {
         const dayOfWeek = current.getDay();
-        // Mon-Fri are 1-5
         if (dayOfWeek >= 1 && dayOfWeek <= 5) {
           const dateStr = this.formatLocalDate(current);
           schoolDays.push({
@@ -144,8 +131,8 @@ export const TermManager = {
   },
 
   /**
-   * Find blockout event for a specific date if any exists
-   * Supports both single-day events and multi-day range blockouts (blocking all periods).
+   * Find blockout event for a specific date if any exists.
+   * Supports both single-day events and multi-day range blockouts.
    */
   getBlockoutForDate(dateStr, classId = null, periodId = null) {
     return state.events.find(ev => {
@@ -154,17 +141,19 @@ export const TermManager = {
       if (!sDate) return false;
       if (dateStr < sDate || dateStr > eDate) return false;
 
-      // Multi-class checklist and legacy backward compatibility
       const cIds = Array.isArray(ev.affectedClassIds) ? ev.affectedClassIds : (ev.affectedClassId ? [ev.affectedClassId] : []);
       const affectsAllClasses = (cIds.length === 0 || cIds.includes('ALL'));
       if (classId) {
         if (!affectsAllClasses && !cIds.includes(classId)) return false;
       }
 
-      // Multi-day blockout events or whole day events block all periods
       if (ev.blockAllDay !== false) return true;
       if (periodId && ev.blockedPeriod === periodId) return true;
       return false;
     });
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.TermManager = TermManager;
+}

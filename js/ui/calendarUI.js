@@ -1,9 +1,23 @@
 /* ==========================================================================
-   Calendar & Term Configuration UI
+   Calendar & Term Configuration UI (View 1)
    ========================================================================== */
 
-import { state } from '../state.js';
+import {
+  state,
+  sortEventsChronologically,
+  getClassCellStyles,
+  showToastNotification,
+  escapeHtml
+} from '../state.js';
 import { TermManager } from '../termManager.js';
+
+function triggerRefresh(force = false, isScheduleEdit = true) {
+  if (typeof window !== 'undefined' && typeof window.refreshAllViews === 'function') {
+    window.refreshAllViews(force, isScheduleEdit);
+  } else if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('planner:stateChanged'));
+  }
+}
 
 export const CalendarUI = {
   init() {
@@ -37,35 +51,25 @@ export const CalendarUI = {
     if (!container) return;
 
     container.innerHTML = state.terms.map(term => `
-      <div class="term-card" data-id="${term.id}">
+      <div class="term-card" data-id="${escapeHtml(term.id)}">
         <div class="term-header">
-          <div class="term-name">${term.name}</div>
+          <div class="term-name">${escapeHtml(term.name)}</div>
           <span class="term-weeks-badge">${TermManager.getTermWeeks(term)} Weeks</span>
         </div>
         <div class="form-group">
           <label class="form-label">Start Date</label>
-          <input type="date" class="form-control term-date-input" data-id="${term.id}" data-field="startDate" value="${term.startDate}">
+          <input type="date" class="form-control term-date-input" data-id="${escapeHtml(term.id)}" data-field="startDate" value="${escapeHtml(term.startDate)}">
         </div>
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">End Date</label>
-          <input type="date" class="form-control term-date-input" data-id="${term.id}" data-field="endDate" value="${term.endDate}">
+          <input type="date" class="form-control term-date-input" data-id="${escapeHtml(term.id)}" data-field="endDate" min="${escapeHtml(term.startDate)}" value="${escapeHtml(term.endDate)}">
         </div>
       </div>
     `).join('');
   },
 
   sortEvents(events = state.data.events) {
-    if (!Array.isArray(events)) return [];
-    events.sort((a, b) => {
-      const sA = String(a?.startDate || a?.date || '');
-      const sB = String(b?.startDate || b?.date || '');
-      if (sA !== sB) return sA.localeCompare(sB);
-      const eA = String(a?.endDate || a?.date || sA);
-      const eB = String(b?.endDate || b?.date || sB);
-      if (eA !== eB) return eA.localeCompare(eB);
-      return String(a?.title || '').localeCompare(String(b?.title || ''));
-    });
-    return events;
+    return sortEventsChronologically(events);
   },
 
   renderEventsList() {
@@ -79,7 +83,6 @@ export const CalendarUI = {
 
     this.sortEvents(state.data.events);
     container.innerHTML = state.events.map(ev => {
-      // Multi-class badges
       const classIds = Array.isArray(ev.affectedClassIds) ? ev.affectedClassIds : (ev.affectedClassId ? [ev.affectedClassId] : []);
       let classBadge = '';
       if (classIds.length === 0 || classIds.includes('ALL')) {
@@ -87,12 +90,12 @@ export const CalendarUI = {
       } else {
         classBadge = classIds.map(cId => {
           const classObj = state.classes.find(c => c.id === cId);
-          return classObj 
-            ? `<span class="tag" style="background:${classObj.color}22; color:${classObj.color}">${classObj.name}</span>`
-            : '';
+          if (!classObj) return '';
+          const cellStyle = getClassCellStyles(classObj.color, state.theme === 'dark');
+          return `<span class="tag" style="background:${cellStyle.tagBg}; color:${cellStyle.tagColor}; border:${cellStyle.tagBorder};">${escapeHtml(classObj.name)}</span>`;
         }).filter(Boolean).join(' ');
       }
-      
+
       const sDate = ev.startDate || ev.date;
       const eDate = ev.endDate || ev.date || sDate;
       const isMultiDay = eDate && eDate > sDate;
@@ -103,19 +106,19 @@ export const CalendarUI = {
       if (isMultiDay) {
         periodBadge = ev.blockAllDay !== false
           ? `<span style="color:var(--warning); font-weight:700;">Multi-Day (All Periods Blocked)</span>`
-          : `<span style="color:var(--warning); font-weight:700;">Multi-Day (Period: ${ev.blockedPeriod})</span>`;
+          : `<span style="color:var(--warning); font-weight:700;">Multi-Day (Period: ${escapeHtml(ev.blockedPeriod)})</span>`;
         dateText = `${TermManager.formatDisplayDate(sDate)} → ${TermManager.formatDisplayDate(eDate)}`;
       } else {
-        periodBadge = ev.blockAllDay !== false ? `Whole Day` : `Blocked Period: ${ev.blockedPeriod}`;
+        periodBadge = ev.blockAllDay !== false ? `Whole Day` : `Blocked Period: ${escapeHtml(ev.blockedPeriod)}`;
         dateText = TermManager.formatDisplayDate(sDate);
       }
 
       return `
-        <div class="event-item" data-id="${ev.id}">
+        <div class="event-item" data-id="${escapeHtml(ev.id)}">
           <div class="event-info">
             <div class="event-title">
-              <span>${ev.title}</span>
-              <span class="event-type-badge type-${ev.type}">${ev.type}</span>
+              <span>${escapeHtml(ev.title)}</span>
+              <span class="event-type-badge type-${escapeHtml(ev.type)}">${escapeHtml(ev.type)}</span>
               ${isMultiDay ? `<span class="tag" style="background:rgba(245,158,11,0.15); color:var(--warning, #f59e0b); font-weight:700; font-size:0.75rem;">📅 Multi-Day</span>` : ''}
             </div>
             <div class="event-date">
@@ -123,8 +126,8 @@ export const CalendarUI = {
             </div>
           </div>
           <div style="display:flex; gap:0.4rem; align-items:center;">
-            <button type="button" class="btn btn-secondary btn-sm edit-event-btn" data-id="${ev.id}">Edit</button>
-            <button type="button" class="btn btn-danger btn-sm delete-event-btn" data-id="${ev.id}">Delete</button>
+            <button type="button" class="btn btn-secondary btn-sm edit-event-btn" data-id="${escapeHtml(ev.id)}">Edit</button>
+            <button type="button" class="btn btn-danger btn-sm delete-event-btn" data-id="${escapeHtml(ev.id)}">Delete</button>
           </div>
         </div>
       `;
@@ -132,18 +135,37 @@ export const CalendarUI = {
   },
 
   bindEvents() {
+    if (this._eventsBound) return;
+    this._eventsBound = true;
+
     const handleYearChange = (newYear) => {
       const yr = parseInt(newYear, 10);
       if (!isNaN(yr) && yr >= 2020 && yr <= 2035) {
         if (yr === state.academicYear) return;
         state.setAcademicYear(yr);
+        if (typeof window !== 'undefined') {
+          if (typeof window.updateCurrentDateDisplay === 'function') {
+            window.updateCurrentDateDisplay();
+          }
+          if (window.LessonUI) {
+            window.LessonUI.selectedClassId = state.classes[0]?.id || null;
+          }
+          if (window.HomeworkUI) {
+            window.HomeworkUI.selectedClassId = state.classes[0]?.id || null;
+            window.HomeworkUI.ensureDefaultTermAndWeek();
+          }
+          if (window.MasterScheduleUI) {
+            window.MasterScheduleUI.selectedClassIds = ['ALL'];
+          }
+        }
+        showToastNotification(`Switched to academic year ${yr}`);
+        triggerRefresh(true, true);
+      } else {
+        showToastNotification('⚠️ Please enter a valid academic year between 2020 and 2035.');
         this.renderTermCards();
-        this.renderEventsList();
-        window.dispatchEvent(new CustomEvent('planner:stateChanged'));
       }
     };
 
-    // Term Date inputs change
     document.addEventListener('change', (e) => {
       if (e.target.id === 'input-academic-year') {
         handleYearChange(e.target.value);
@@ -153,17 +175,30 @@ export const CalendarUI = {
         const field = e.target.getAttribute('data-field');
         const term = state.terms.find(t => t.id === id);
         if (term) {
-          term[field] = e.target.value;
-          term.weeks = TermManager.getTermWeeks(term);
-          const card = document.querySelector(`.term-card[data-id="${id}"]`);
-          if (card) {
-            const badge = card.querySelector('.term-weeks-badge');
-            if (badge) {
-              badge.textContent = `${term.weeks} Weeks`;
-            }
+          const newVal = e.target.value;
+          if (!newVal) {
+            e.target.value = term[field];
+            return;
           }
+          // Validate start date <= end date
+          if (field === 'startDate' && term.endDate && newVal > term.endDate) {
+            showToastNotification(`⚠️ ${term.name} Start Date cannot be after End Date. End Date adjusted.`);
+            term.endDate = newVal;
+          } else if (field === 'endDate' && term.startDate && newVal < term.startDate) {
+            showToastNotification(`⚠️ ${term.name} End Date cannot be before Start Date.`);
+            e.target.value = term.endDate;
+            return;
+          }
+
+          term[field] = newVal;
+          term.weeks = TermManager.getTermWeeks(term);
           state.saveState();
-          window.dispatchEvent(new CustomEvent('planner:stateChanged'));
+          if (typeof window !== 'undefined' && window.MasterScheduleUI) {
+            window.MasterScheduleUI._cachedTermWeeks = null;
+            window.MasterScheduleUI._cachedTermsKey = null;
+          }
+          this.renderTermCards();
+          triggerRefresh(false, true);
         }
       }
     });
@@ -176,7 +211,6 @@ export const CalendarUI = {
       }
     });
 
-    // Delete Event, Edit Event & Year Prev/Next Buttons
     document.addEventListener('click', (e) => {
       if (e.target.id === 'btn-year-prev' || e.target.closest('#btn-year-prev')) {
         handleYearChange(state.academicYear - 1);
@@ -190,7 +224,7 @@ export const CalendarUI = {
         state.data.events = state.events.filter(ev => ev.id !== id);
         state.saveState();
         this.renderEventsList();
-        window.dispatchEvent(new CustomEvent('planner:stateChanged'));
+        triggerRefresh(false, true);
       }
       if (e.target.classList.contains('edit-event-btn') || e.target.closest('.edit-event-btn')) {
         const btn = e.target.classList.contains('edit-event-btn') ? e.target : e.target.closest('.edit-event-btn');
@@ -199,7 +233,6 @@ export const CalendarUI = {
       }
     });
 
-    // Add Event Form Submit
     const addEventBtn = document.getElementById('btn-open-event-modal');
     if (addEventBtn) {
       addEventBtn.addEventListener('click', () => {
@@ -256,11 +289,10 @@ export const CalendarUI = {
         const endDateVal = document.getElementById('event-end-date')?.value;
         const endDate = (endDateVal && endDateVal >= startDate) ? endDateVal : startDate;
         const type = document.getElementById('event-type').value;
-        const blockAllDayCheckbox = document.getElementById('event-block-allday');
-        const blockAllDay = blockAllDayCheckbox ? blockAllDayCheckbox.checked : true;
+        const blockAllDayEl = document.getElementById('event-block-allday');
+        const blockAllDay = blockAllDayEl ? blockAllDayEl.checked : true;
         const blockedPeriod = blockAllDay ? null : document.getElementById('event-period-select')?.value;
 
-        // Gather affected classes from checklist
         const checkAll = document.getElementById('event-class-check-all');
         const classBoxes = document.querySelectorAll('.event-class-checkbox');
         let affectedClassIds = [];
@@ -289,6 +321,7 @@ export const CalendarUI = {
             existing.affectedClassIds = affectedClassIds;
             existing.affectedClassId = affectedClassId;
           }
+          showToastNotification(`Updated blockout event "${title}"`);
         } else {
           const newEvent = {
             id: `e_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
@@ -303,6 +336,7 @@ export const CalendarUI = {
             affectedClassId: affectedClassId
           };
           state.data.events.push(newEvent);
+          showToastNotification(`Added blockout event "${title}"`);
         }
 
         this.sortEvents(state.data.events);
@@ -310,7 +344,7 @@ export const CalendarUI = {
         document.getElementById('modal-event-backdrop')?.classList.remove('active');
         eventForm.reset();
         this.renderEventsList();
-        window.dispatchEvent(new CustomEvent('planner:stateChanged'));
+        triggerRefresh(true, true);
       });
     }
   },
@@ -330,10 +364,11 @@ export const CalendarUI = {
 
     state.classes.forEach(c => {
       const checked = isAll || selectedIds.includes(c.id);
+      const cellStyle = getClassCellStyles(c.color, state.theme === 'dark');
       html += `
         <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.85rem; padding:0.15rem 0;">
-          <input type="checkbox" class="event-class-checkbox" value="${c.id}" ${checked ? 'checked' : ''}>
-          <span class="tag" style="background:${c.color}22; color:${c.color}; font-weight:700;">● ${c.name}</span>
+          <input type="checkbox" class="event-class-checkbox" value="${escapeHtml(c.id)}" ${checked ? 'checked' : ''}>
+          <span class="tag" style="background:${cellStyle.tagBg}; color:${cellStyle.tagColor}; border:${cellStyle.tagBorder}; font-weight:700;"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${cellStyle.dotBg}; border:${cellStyle.dotBorder}; margin-right:4px; vertical-align:middle;"></span>${escapeHtml(c.name)}</span>
         </label>
       `;
     });
@@ -375,11 +410,10 @@ export const CalendarUI = {
 
     this.renderClassChecklist(['ALL']);
 
-    // Populate period selector dropdown inside modal
     const periodSelect = document.getElementById('event-period-select');
     if (periodSelect && state.periods) {
       periodSelect.innerHTML = state.periods.filter(p => !p.isBreak).map(p =>
-        `<option value="${p.id}">${p.name}</option>`
+        `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`
       ).join('');
     }
 
@@ -450,7 +484,7 @@ export const CalendarUI = {
     if (periodSelect) {
       if (state.periods) {
         periodSelect.innerHTML = state.periods.filter(p => !p.isBreak).map(p =>
-          `<option value="${p.id}">${p.name}</option>`
+          `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`
         ).join('');
       }
       if (ev.blockedPeriod) periodSelect.value = ev.blockedPeriod;
@@ -469,3 +503,7 @@ export const CalendarUI = {
     modalBackdrop.classList.add('active');
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.CalendarUI = CalendarUI;
+}
